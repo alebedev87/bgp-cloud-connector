@@ -10,7 +10,7 @@ import (
 	ec2types "github.com/aws/aws-sdk-go-v2/service/ec2/types"
 	"github.com/aws/aws-sdk-go-v2/service/sts"
 
-	"github.com/openshift/cudn-bgp-routing-operator/internal/platform"
+	"github.com/openshift/bgp-cloud-connector/internal/platform"
 )
 
 // --- Mocks ---

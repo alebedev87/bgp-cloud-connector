@@ -9,7 +9,7 @@ import (
 	ec2types "github.com/aws/aws-sdk-go-v2/service/ec2/types"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
-	"github.com/openshift/cudn-bgp-routing-operator/internal/platform"
+	"github.com/openshift/bgp-cloud-connector/internal/platform"
 )
 
 func (p *Platform) DiscoverEndpoints(ctx context.Context) (*platform.DiscoveryResult, error) {

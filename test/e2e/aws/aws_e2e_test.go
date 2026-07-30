@@ -34,8 +34,8 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	networkingv1alpha1 "github.com/openshift/cudn-bgp-routing-operator/api/v1alpha1"
-	awsplatform "github.com/openshift/cudn-bgp-routing-operator/internal/platform/aws"
+	networkingv1alpha1 "github.com/openshift/bgp-cloud-connector/api/v1alpha1"
+	awsplatform "github.com/openshift/bgp-cloud-connector/internal/platform/aws"
 )
 
 const (

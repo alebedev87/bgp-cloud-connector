@@ -34,7 +34,7 @@ import (
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
-	networkingv1alpha1 "github.com/openshift/cudn-bgp-routing-operator/api/v1alpha1"
+	networkingv1alpha1 "github.com/openshift/bgp-cloud-connector/api/v1alpha1"
 )
 
 // +kubebuilder:rbac:groups=networking.openshift.io,resources=cudnbgproutings,verbs=get;list;watch;create;update;patch;delete

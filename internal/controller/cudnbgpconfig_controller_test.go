@@ -32,9 +32,9 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
-	networkingv1alpha1 "github.com/openshift/cudn-bgp-routing-operator/api/v1alpha1"
-	"github.com/openshift/cudn-bgp-routing-operator/internal/platform"
-	awsplatform "github.com/openshift/cudn-bgp-routing-operator/internal/platform/aws"
+	networkingv1alpha1 "github.com/openshift/bgp-cloud-connector/api/v1alpha1"
+	"github.com/openshift/bgp-cloud-connector/internal/platform"
+	awsplatform "github.com/openshift/bgp-cloud-connector/internal/platform/aws"
 )
 
 func configTestScheme() *runtime.Scheme {

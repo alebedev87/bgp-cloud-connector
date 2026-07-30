@@ -9,7 +9,7 @@ plugins:
   manifests.sdk.operatorframework.io/v2: {}
   scorecard.sdk.operatorframework.io/v2: {}
 projectName: openshift-cudn-bgp-routing
-repo: github.com/openshift/cudn-bgp-routing-operator
+repo: github.com/openshift/bgp-cloud-connector
 resources:
 - api:
     crdVersion: v1
@@ -18,7 +18,7 @@ resources:
   domain: openshift.io
   group: networking
   kind: CUDNBgpConfig
-  path: github.com/openshift/cudn-bgp-routing-operator/api/v1alpha1
+  path: github.com/openshift/bgp-cloud-connector/api/v1alpha1
   version: v1alpha1
 - api:
     crdVersion: v1
@@ -27,6 +27,6 @@ resources:
   domain: openshift.io
   group: networking
   kind: CUDNBgpRouting
-  path: github.com/openshift/cudn-bgp-routing-operator/api/v1alpha1
+  path: github.com/openshift/bgp-cloud-connector/api/v1alpha1
   version: v1alpha1
 version: "3"

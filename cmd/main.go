@@ -37,8 +37,8 @@ import (
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 
-	networkingv1alpha1 "github.com/openshift/cudn-bgp-routing-operator/api/v1alpha1"
-	"github.com/openshift/cudn-bgp-routing-operator/internal/controller"
+	networkingv1alpha1 "github.com/openshift/bgp-cloud-connector/api/v1alpha1"
+	"github.com/openshift/bgp-cloud-connector/internal/controller"
 	// +kubebuilder:scaffold:imports
 )
 

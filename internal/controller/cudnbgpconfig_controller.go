@@ -42,9 +42,9 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
-	networkingv1alpha1 "github.com/openshift/cudn-bgp-routing-operator/api/v1alpha1"
-	"github.com/openshift/cudn-bgp-routing-operator/internal/platform"
-	awsplatform "github.com/openshift/cudn-bgp-routing-operator/internal/platform/aws"
+	networkingv1alpha1 "github.com/openshift/bgp-cloud-connector/api/v1alpha1"
+	"github.com/openshift/bgp-cloud-connector/internal/platform"
+	awsplatform "github.com/openshift/bgp-cloud-connector/internal/platform/aws"
 )
 
 // +kubebuilder:rbac:groups=networking.openshift.io,resources=cudnbgpconfigs,verbs=get;list;watch;create;update;patch;delete

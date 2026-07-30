@@ -12,7 +12,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/sts"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
-	"github.com/openshift/cudn-bgp-routing-operator/internal/platform"
+	"github.com/openshift/bgp-cloud-connector/internal/platform"
 )
 
 type ec2API interface {

@@ -1,4 +1,4 @@
-module github.com/openshift/cudn-bgp-routing-operator
+module github.com/openshift/bgp-cloud-connector
 
 go 1.24.0
 

@@ -25,7 +25,7 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	networkingv1alpha1 "github.com/openshift/cudn-bgp-routing-operator/api/v1alpha1"
+	networkingv1alpha1 "github.com/openshift/bgp-cloud-connector/api/v1alpha1"
 )
 
 // ValidateNamespaceLabels checks that at least one namespace exists with the required

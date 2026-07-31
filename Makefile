@@ -129,9 +129,12 @@ lint-config: golangci-lint ## Verify golangci-lint linter configuration
 
 ##@ Build
 
+.PHONY: build-operator
+build-operator: ## Build manager binary, no additional checks or code generation.
+	go build -tags strictfipsruntime -o bin/manager cmd/main.go
+
 .PHONY: build
-build: manifests generate fmt vet ## Build manager binary.
-	go build -o bin/manager cmd/main.go
+build: manifests generate fmt vet build-operator ## Build manager binary.
 
 .PHONY: run
 run: manifests generate fmt vet ## Run a controller from your host.

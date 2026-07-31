@@ -8,6 +8,8 @@ rules:
   - ""
   resources:
   - namespaces
+  - nodes
+  - pods
   verbs:
   - get
   - list
@@ -18,15 +20,6 @@ rules:
   - infrastructures
   verbs:
   - get
-- apiGroups:
-  - ""
-  resources:
-  - nodes
-  - pods
-  verbs:
-  - get
-  - list
-  - watch
 - apiGroups:
   - frrk8s.metallb.io
   resources:

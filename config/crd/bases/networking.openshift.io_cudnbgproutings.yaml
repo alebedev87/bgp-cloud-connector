@@ -27,8 +27,9 @@ spec:
     name: v1alpha1
     schema:
       openAPIV3Schema:
-        description: CUDNBgpRouting declares a single CUDN network to create and advertise
-          via BGP.
+        description: |-
+          CUDNBgpRouting declares a single CUDN network to advertise via BGP.
+          Users must pre-create and label namespaces; the operator manages only the CUDN and RouteAdvertisements.
         properties:
           apiVersion:
             description: |-

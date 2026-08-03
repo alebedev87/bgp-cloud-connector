@@ -87,6 +87,20 @@ manifests: controller-gen ## Generate WebhookConfiguration, ClusterRole and Cust
 generate: controller-gen ## Generate code containing DeepCopy, DeepCopyInto, and DeepCopyObject method implementations.
 	$(CONTROLLER_GEN) object:headerFile="hack/boilerplate.go.txt" paths="./..."
 
+.PHONY: vendor
+vendor: ## Tidy go.mod/go.sum and refresh the vendor directory.
+	go mod tidy
+	go mod vendor
+	go mod verify
+
+.PHONY: verify-vendor
+verify-vendor: vendor ## Fail if go.mod, go.sum or vendor/ are out of date.
+	git diff --exit-code --name-only go.mod go.sum vendor/
+
+.PHONY: install-git-hooks
+install-git-hooks: ## Run the tracked hooks in hack/githooks, including a pre-push vendor check.
+	git config core.hooksPath hack/githooks
+
 .PHONY: fmt
 fmt: ## Run go fmt against code.
 	go fmt ./...

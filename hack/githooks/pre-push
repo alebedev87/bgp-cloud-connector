@@ -1,0 +1,15 @@
+#!/usr/bin/env bash
+#
+# Refuse the push if go.mod, go.sum or vendor/ are out of date. The
+# Konflux build is hermetic: there is no network to fall back on, so
+# stale vendored dependencies fail the build there rather than here.
+#
+# Enable with `make install-git-hooks`; bypass once with `git push
+# --no-verify`.
+
+if ! make verify-vendor; then
+    echo >&2
+    echo "pre-push: vendored dependencies are out of date." >&2
+    echo "pre-push: the files above have been regenerated for you; commit them and push again." >&2
+    exit 1
+fi

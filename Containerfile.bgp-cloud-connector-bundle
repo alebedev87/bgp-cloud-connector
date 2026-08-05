@@ -1,3 +1,13 @@
+FROM registry.access.redhat.com/ubi9/ubi:latest AS update
+RUN python3 -m ensurepip && \
+    python3 -m pip install ruamel.yaml
+
+COPY hack/konflux .
+COPY bundle/manifests /manifests/
+COPY bundle/metadata /metadata/
+
+RUN source ./container_digest.sh && source ./bundle_vars.sh && python3 ./update_bundle.py
+
 FROM scratch
 
 # Core bundle labels.
@@ -15,5 +25,5 @@ LABEL maintainer="Red Hat, Inc."
 LABEL com.redhat.component="bgp-cloud-connector-bundle"
 LABEL name="bgp-cloud-connector/bgp-cloud-connector-bundle"
 
-COPY bundle/manifests /manifests/
-COPY bundle/metadata /metadata/
+COPY --from=update /manifests /manifests/
+COPY --from=update /metadata /metadata/

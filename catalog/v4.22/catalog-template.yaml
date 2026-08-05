@@ -9,8 +9,7 @@ entries:
   name: alpha
   package: openshift-cudn-bgp-routing
   schema: olm.channel
-# TODO: temporary image, replace with the real bundle image built on Konflux
-- image: quay.io/alebedev/bgp-cloud-connector/bgp-cloud-connector-bundle:5.8.144
+- image: quay.io/redhat-user-workloads/bgp-cloud-connector-tenant/bgp-cloud-connector/bgp-cloud-connector-bundle@sha256:5ebb1565b4e1915f47f9e872264512ce3bb5305d1cee7e50648b2ac21af707a4
   name: openshift-cudn-bgp-routing.v0.1.0
   schema: olm.bundle
 schema: olm.template.basic

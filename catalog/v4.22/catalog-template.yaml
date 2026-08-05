@@ -1,0 +1,15 @@
+---
+entries:
+- defaultChannel: alpha
+  name: openshift-cudn-bgp-routing
+  schema: olm.package
+- entries:
+  - name: openshift-cudn-bgp-routing.v0.1.0
+    skipRange: <0.1.0
+  name: alpha
+  package: openshift-cudn-bgp-routing
+  schema: olm.channel
+- image: registry.redhat.io/bgp-cloud-connector/bgp-cloud-connector-bundle@sha256:REPLACE_ME
+  name: openshift-cudn-bgp-routing.v0.1.0
+  schema: olm.bundle
+schema: olm.template.basic

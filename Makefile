@@ -33,6 +33,10 @@ ifeq ($(USE_IMAGE_DIGESTS), true)
 	BUNDLE_GEN_FLAGS += --use-image-digests
 endif
 
+CATALOG_DIR := catalog
+OCP_VERSION ?= 4.22
+OCP_CATALOG_DIR := $(CATALOG_DIR)/v$(OCP_VERSION)
+
 # Set the Operator SDK version to use. By default, what is installed on the system is used.
 # This is useful for CI or a project to utilize a specific version of the operator-sdk toolkit.
 OPERATOR_SDK_VERSION ?= v1.42.2
@@ -326,6 +330,11 @@ else
 OPM = $(shell which opm)
 endif
 endif
+
+.PHONY: generate-catalog
+generate-catalog: opm ## Generate OCP version-based FBC catalog from template.
+	mkdir -p $(OCP_CATALOG_DIR)
+	$(OPM) alpha render-template basic --migrate-level bundle-object-to-csv-metadata -o yaml $(OCP_CATALOG_DIR)/catalog-template.yaml > $(OCP_CATALOG_DIR)/catalog.yaml
 
 # A comma-separated list of bundle images (e.g. make catalog-build BUNDLE_IMGS=example.com/operator-bundle:v0.1.0,example.com/operator-bundle:v0.2.0).
 # These images MUST exist in a registry and be pull-able.

@@ -1,0 +1,1 @@
+export OPERATOR_IMAGE_PULLSPEC='quay.io/redhat-user-workloads/bgp-cloud-connector-tenant/bgp-cloud-connector/bgp-cloud-connector-operator@sha256:ca8e00390ae0f2fe6bc87590b8c8ed84094c179eb8e5e6b62cda06d67f052466'

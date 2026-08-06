@@ -83,7 +83,7 @@ properties:
         ]
       capabilities: Basic Install
       categories: Networking
-      containerImage: controller:latest
+      containerImage: quay.io/redhat-user-workloads/bgp-cloud-connector-tenant/bgp-cloud-connector/bgp-cloud-connector-operator@sha256:ca8e00390ae0f2fe6bc87590b8c8ed84094c179eb8e5e6b62cda06d67f052466
       createdAt: "2026-07-31T10:07:33Z"
       description: Automates L3 direct routing between CUDN Pod networks and external
         networks via BGP on OpenShift. Cloud platform aware — auto-discovers BGP infrastructure
@@ -143,8 +143,8 @@ properties:
     provider:
       name: Red Hat
 relatedImages:
-- image: controller:latest
-  name: ""
+- image: quay.io/redhat-user-workloads/bgp-cloud-connector-tenant/bgp-cloud-connector/bgp-cloud-connector-operator@sha256:ca8e00390ae0f2fe6bc87590b8c8ed84094c179eb8e5e6b62cda06d67f052466
+  name: bgp-cloud-connector-operator
 - image: quay.io/redhat-user-workloads/bgp-cloud-connector-tenant/bgp-cloud-connector/bgp-cloud-connector-bundle@sha256:5ebb1565b4e1915f47f9e872264512ce3bb5305d1cee7e50648b2ac21af707a4
   name: ""
 schema: olm.bundle

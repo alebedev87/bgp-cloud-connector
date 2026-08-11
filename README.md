@@ -11,6 +11,7 @@ The operator is **cloud platform aware**. When platform configuration is provide
 - [Custom Resource Definitions](#custom-resource-definitions)
 - [Controller Reconciliation](#controller-reconciliation)
 - [Development](#development)
+- [Deploy via OLM bundle](#deploy-via-olm-bundle)
 - [Automated Testing](#automated-testing)
 - [KubeVirt VM Testing](#kubevirt-vm-testing)
 
@@ -791,6 +792,23 @@ oc get routeadvertisements
 oc delete cudnbgprouting --all
 oc delete cudnbgpconfig cluster
 make undeploy
+```
+
+---
+
+## Deploy via OLM bundle
+
+Use this workflow to test the operator as it would be installed from OperatorHub, using a bundle image.
+This requires an external image registry (e.g. `quay.io`) that the cluster can pull from, and a kubeconfig pointing at the target cluster.
+
+```bash
+VERSION=x.y.z IMAGE_TAG_BASE=quay.io/<org>/bgp-cloud-connector \
+  make docker-build docker-push bundle-build bundle-push bundle-run
+```
+
+To remove the operator and all OLM resources it created:
+```bash
+make bundle-clean
 ```
 
 ---

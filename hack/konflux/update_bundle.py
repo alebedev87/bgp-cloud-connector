@@ -19,6 +19,7 @@ with open(csv_file, 'r') as f:
     content = f.read()
 
 content = content.replace('controller:latest', f'"{operator_pullspec}"')
+content = content.replace('openshift.io/bgp-cloud-connector:v0.1.0', f'"{operator_pullspec}"')
 
 yaml = YAML()
 yaml.preserve_quotes = True

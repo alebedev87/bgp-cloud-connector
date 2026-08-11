@@ -45,7 +45,7 @@ metadata:
     capabilities: Basic Install
     categories: Networking
     containerImage: controller:latest
-    createdAt: "2026-08-14T13:01:18Z"
+    createdAt: "2026-08-17T13:45:02Z"
     description: Automates L3 direct routing between CUDN Pod networks and external
       networks via BGP on OpenShift. Cloud platform aware — auto-discovers BGP infrastructure
       on AWS (VPC Route Server) and works on-premise with explicit configuration.
@@ -227,7 +227,7 @@ spec:
                 - --health-probe-bind-address=:8081
                 command:
                 - /manager
-                image: controller:latest
+                image: openshift.io/bgp-cloud-connector:v0.1.0
                 livenessProbe:
                   httpGet:
                     path: /healthz

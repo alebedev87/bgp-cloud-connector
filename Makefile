@@ -41,7 +41,7 @@ OCP_CATALOG_DIR := $(CATALOG_DIR)/v$(OCP_VERSION)
 # This is useful for CI or a project to utilize a specific version of the operator-sdk toolkit.
 OPERATOR_SDK_VERSION ?= v1.42.2
 # Image URL to use all building/pushing image targets
-IMG ?= controller:latest
+IMG ?= $(IMAGE_TAG_BASE):v$(VERSION)
 
 # Get the currently used golang install path (in GOPATH/bin, unless GOBIN is set)
 ifeq (,$(shell go env GOBIN))
@@ -274,6 +274,18 @@ bundle-build: bundle ## Build the bundle image.
 .PHONY: bundle-push
 bundle-push: ## Push the bundle image.
 	$(MAKE) docker-push IMG=$(BUNDLE_IMG)
+
+BUNDLE_NAMESPACE ?= openshift-cudn-bgp-routing
+BUNDLE_RUN_FLAGS ?= --namespace=$(BUNDLE_NAMESPACE) --install-mode=OwnNamespace
+BUNDLE_CLEANUP_FLAGS ?= --namespace=$(BUNDLE_NAMESPACE)
+
+.PHONY: bundle-run
+bundle-run: operator-sdk ## Deploy the operator from the bundle image using operator-sdk run bundle.
+	$(OPERATOR_SDK) run bundle $(BUNDLE_IMG) $(BUNDLE_RUN_FLAGS)
+
+.PHONY: bundle-clean
+bundle-clean: operator-sdk ## Remove the operator deployed via bundle-run.
+	$(OPERATOR_SDK) cleanup openshift-cudn-bgp-routing $(BUNDLE_CLEANUP_FLAGS)
 
 .PHONY: opm
 OPM = $(LOCALBIN)/opm

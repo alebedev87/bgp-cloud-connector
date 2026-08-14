@@ -23,7 +23,17 @@ LABEL operators.operatorframework.io.metrics.project_layout=go.kubebuilder.io/v4
 
 LABEL maintainer="Red Hat, Inc."
 LABEL com.redhat.component="bgp-cloud-connector-bundle"
-LABEL name="bgp-cloud-connector/bgp-cloud-connector-bundle"
+LABEL name="bgpcc/bgp-cloud-connector-operator-bundle"
+LABEL version="0.1.0"
+LABEL cpe="cpe:/a:redhat:bgp_cloud_connector:0.1::el9"
+LABEL release="0.1.0"
+LABEL description="Operator bundle for the BGP cloud connector"
+LABEL distribution-scope=public
+LABEL url="https://github.com/openshift/bgp-cloud-connector"
+LABEL vendor="Red Hat, Inc."
+LABEL io.k8s.display-name="BGP cloud connector Operator"
+LABEL io.k8s.description="Operator bundle for the BGP cloud connector"
+LABEL io.openshift.tags="networking,bgp"
 
 COPY --from=update /manifests /manifests/
 COPY --from=update /metadata /metadata/

@@ -101,6 +101,13 @@ vendor: ## Tidy go.mod/go.sum and refresh the vendor directory.
 verify-vendor: vendor ## Fail if go.mod, go.sum or vendor/ are out of date.
 	git diff --exit-code --name-only go.mod go.sum vendor/
 
+.PHONY: verify-version
+verify-version: set-version ## Fail if Containerfile labels are out of sync with VERSION.
+	git diff --exit-code --name-only Containerfile.bgp-cloud-connector Containerfile.bgp-cloud-connector-bundle
+
+.PHONY: verify
+verify: verify-vendor verify-version ## Run all verification checks.
+
 .PHONY: install-git-hooks
 install-git-hooks: ## Run the tracked hooks in hack/githooks, including a pre-push vendor check.
 	git config core.hooksPath hack/githooks
@@ -146,6 +153,10 @@ lint-config: ## Verify golangci-lint linter configuration
 	$(GOLANGCI_LINT) config verify
 
 ##@ Build
+
+.PHONY: set-version
+set-version: ## Sync VERSION file to all Containerfile labels.
+	@./hack/sync-version.sh
 
 .PHONY: build-operator
 build-operator: ## Build manager binary, no additional checks or code generation.

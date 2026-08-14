@@ -1,6 +1,7 @@
 FROM registry.access.redhat.com/ubi9/ubi:latest AS update
+COPY wheels /wheels
 RUN python3 -m ensurepip && \
-    python3 -m pip install ruamel.yaml
+    python3 -m pip install --no-index --find-links=/wheels ruamel.yaml==0.17.9
 
 COPY hack/konflux .
 COPY bundle/manifests /manifests/

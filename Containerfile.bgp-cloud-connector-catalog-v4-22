@@ -9,14 +9,14 @@ COPY LICENSE /licenses/
 ENTRYPOINT ["/bin/opm"]
 
 # Copy the FBC catalog (OCP version-based)
-COPY catalog/v4.22/catalog.yaml /configs/openshift-cudn-bgp-routing/catalog.yaml
+COPY catalog/v4.22/catalog.yaml /configs/bgp-cloud-connector/catalog.yaml
 
 # Pre-populate serve cache
-RUN ["/bin/opm", "serve", "/configs/openshift-cudn-bgp-routing", "--cache-dir=/tmp/cache", "--cache-only"]
+RUN ["/bin/opm", "serve", "/configs/bgp-cloud-connector", "--cache-dir=/tmp/cache", "--cache-only"]
 
 # Set DC-specific label for the location of the DC root directory
 # in the image
 LABEL operators.operatorframework.io.index.configs.v1=/configs
 
 # Configure the command to serve the catalog
-CMD ["serve", "/configs/openshift-cudn-bgp-routing", "--cache-dir=/tmp/cache"]
+CMD ["serve", "/configs/bgp-cloud-connector", "--cache-dir=/tmp/cache"]

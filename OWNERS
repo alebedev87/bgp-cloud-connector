@@ -1,0 +1,17 @@
+approvers:
+  - alebedev87
+  - frobware
+  - omark-rh
+  - gavrielg1
+  - aswinsuryan
+  - daxelrod-rh
+  - knobunc
+  - mffiedler
+reviewers:
+  - alebedev87
+  - frobware
+  - omark-rh
+  - gavrielg1
+  - aswinsuryan
+  - daxelrod-rh
+component: Networking

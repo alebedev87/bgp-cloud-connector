@@ -13,7 +13,7 @@ operator_pullspec = os.getenv('OPERATOR_IMAGE_PULLSPEC', '')
 if not operator_pullspec:
     print('ERROR: OPERATOR_IMAGE_PULLSPEC is not set')
     sys.exit(1)
-csv_file = os.path.join(manifests_dir, 'openshift-cudn-bgp-routing.clusterserviceversion.yaml')
+csv_file = os.path.join(manifests_dir, 'bgp-cloud-connector.clusterserviceversion.yaml')
 
 with open(csv_file, 'r') as f:
     content = f.read()

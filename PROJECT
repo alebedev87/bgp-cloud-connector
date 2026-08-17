@@ -7,7 +7,7 @@ layout:
 - go.kubebuilder.io/v4
 plugins:
   manifests.sdk.operatorframework.io/v2: {}
-projectName: openshift-cudn-bgp-routing
+projectName: bgp-cloud-connector
 repo: github.com/openshift/bgp-cloud-connector
 resources:
 - api:

@@ -608,3 +608,337 @@ func TestDiscoverEndpoints_APIFailure(t *testing.T) {
 		t.Fatal("expected error on API failure")
 	}
 }
+
+func TestDiscoverEndpoints_PaginatesEndpoints(t *testing.T) {
+	calls := 0
+	mock := newDiscoveryMock()
+	mock.describeRSEFunc = func(input *ec2.DescribeRouteServerEndpointsInput) (*ec2.DescribeRouteServerEndpointsOutput, error) {
+		calls++
+		if input.NextToken == nil {
+			return &ec2.DescribeRouteServerEndpointsOutput{
+				RouteServerEndpoints: []ec2types.RouteServerEndpoint{
+					{RouteServerEndpointId: aws.String("rse-a1"), RouteServerId: aws.String("rs-1"), SubnetId: aws.String("subnet-a"), EniAddress: aws.String("10.0.1.47")},
+					{RouteServerEndpointId: aws.String("rse-b1"), RouteServerId: aws.String("rs-1"), SubnetId: aws.String("subnet-b"), EniAddress: aws.String("10.0.2.91")},
+				},
+				NextToken: aws.String("page-2"),
+			}, nil
+		}
+		if aws.ToString(input.NextToken) != "page-2" {
+			t.Fatalf("unexpected NextToken %q", aws.ToString(input.NextToken))
+		}
+		return &ec2.DescribeRouteServerEndpointsOutput{
+			RouteServerEndpoints: []ec2types.RouteServerEndpoint{
+				{RouteServerEndpointId: aws.String("rse-c1"), RouteServerId: aws.String("rs-1"), SubnetId: aws.String("subnet-c"), EniAddress: aws.String("10.0.3.62")},
+			},
+		}, nil
+	}
+
+	p := &Platform{
+		ec2Client:      mock,
+		routeServerIDs: []string{"rs-1"},
+	}
+	result, err := p.DiscoverEndpoints(context.Background())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if calls != 2 {
+		t.Fatalf("expected 2 DescribeRouteServerEndpoints calls, got %d", calls)
+	}
+	total := 0
+	for _, eps := range result.EndpointsByAZ {
+		total += len(eps)
+	}
+	if total != 3 {
+		t.Fatalf("expected 3 endpoints across pages, got %d", total)
+	}
+}
+
+func TestDiscoverEndpoints_EmptyStringNextTokenStops(t *testing.T) {
+	calls := 0
+	mock := newDiscoveryMock()
+	mock.describeRSEFunc = func(input *ec2.DescribeRouteServerEndpointsInput) (*ec2.DescribeRouteServerEndpointsOutput, error) {
+		calls++
+		if input.NextToken != nil {
+			t.Fatalf("expected no second page call, got NextToken %q", aws.ToString(input.NextToken))
+		}
+		return &ec2.DescribeRouteServerEndpointsOutput{
+			RouteServerEndpoints: []ec2types.RouteServerEndpoint{
+				{RouteServerEndpointId: aws.String("rse-a1"), RouteServerId: aws.String("rs-1"), SubnetId: aws.String("subnet-a"), EniAddress: aws.String("10.0.1.47")},
+			},
+			NextToken: aws.String(""),
+		}, nil
+	}
+
+	p := &Platform{
+		ec2Client:      mock,
+		routeServerIDs: []string{"rs-1"},
+	}
+	result, err := p.DiscoverEndpoints(context.Background())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if calls != 1 {
+		t.Fatalf("expected 1 call when NextToken is empty string, got %d", calls)
+	}
+	if len(result.EndpointsByAZ["us-east-1a"]) != 1 {
+		t.Fatalf("expected 1 endpoint, got %d", len(result.EndpointsByAZ["us-east-1a"]))
+	}
+}
+
+func TestDiscoverEndpoints_Page2Error(t *testing.T) {
+	mock := newDiscoveryMock()
+	mock.describeRSEFunc = func(input *ec2.DescribeRouteServerEndpointsInput) (*ec2.DescribeRouteServerEndpointsOutput, error) {
+		if input.NextToken == nil {
+			return &ec2.DescribeRouteServerEndpointsOutput{
+				RouteServerEndpoints: []ec2types.RouteServerEndpoint{
+					{RouteServerEndpointId: aws.String("rse-a1"), RouteServerId: aws.String("rs-1"), SubnetId: aws.String("subnet-a"), EniAddress: aws.String("10.0.1.47")},
+				},
+				NextToken: aws.String("page-2"),
+			}, nil
+		}
+		return nil, errors.New("ec2 API failure on page 2")
+	}
+
+	p := &Platform{
+		ec2Client:      mock,
+		routeServerIDs: []string{"rs-1"},
+	}
+	_, err := p.DiscoverEndpoints(context.Background())
+	if err == nil {
+		t.Fatal("expected error on page 2 failure")
+	}
+}
+
+func TestDiscoverEndpoints_MultipleRouteServers_Paginates(t *testing.T) {
+	calls := 0
+	paginationRestarts := 0
+	mock := &mockEC2{
+		describeRSFunc: func(input *ec2.DescribeRouteServersInput) (*ec2.DescribeRouteServersOutput, error) {
+			asn := int64(64512)
+			if input.RouteServerIds[0] == "rs-2" {
+				asn = 64513
+			}
+			return &ec2.DescribeRouteServersOutput{
+				RouteServers: []ec2types.RouteServer{
+					{RouteServerId: aws.String(input.RouteServerIds[0]), AmazonSideAsn: aws.Int64(asn)},
+				},
+			}, nil
+		},
+		describeRSEFunc: func(input *ec2.DescribeRouteServerEndpointsInput) (*ec2.DescribeRouteServerEndpointsOutput, error) {
+			calls++
+			if input.NextToken == nil {
+				paginationRestarts++
+				return &ec2.DescribeRouteServerEndpointsOutput{
+					RouteServerEndpoints: []ec2types.RouteServerEndpoint{
+						{RouteServerEndpointId: aws.String("rse-1a"), RouteServerId: aws.String("rs-1"), SubnetId: aws.String("subnet-a"), EniAddress: aws.String("10.0.1.10")},
+					},
+					NextToken: aws.String("page-2"),
+				}, nil
+			}
+			if aws.ToString(input.NextToken) != "page-2" {
+				t.Fatalf("unexpected NextToken %q", aws.ToString(input.NextToken))
+			}
+			return &ec2.DescribeRouteServerEndpointsOutput{
+				RouteServerEndpoints: []ec2types.RouteServerEndpoint{
+					{RouteServerEndpointId: aws.String("rse-2a"), RouteServerId: aws.String("rs-2"), SubnetId: aws.String("subnet-a"), EniAddress: aws.String("10.0.1.20")},
+				},
+			}, nil
+		},
+		describeSubFunc: func(_ *ec2.DescribeSubnetsInput) (*ec2.DescribeSubnetsOutput, error) {
+			return &ec2.DescribeSubnetsOutput{
+				Subnets: []ec2types.Subnet{
+					{SubnetId: aws.String("subnet-a"), AvailabilityZone: aws.String("us-east-1a")},
+				},
+			}, nil
+		},
+	}
+
+	p := &Platform{
+		ec2Client:      mock,
+		routeServerIDs: []string{"rs-1", "rs-2"},
+	}
+	result, err := p.DiscoverEndpoints(context.Background())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if paginationRestarts != 2 {
+		t.Fatalf("expected 2 pagination restarts (one per RS), got %d", paginationRestarts)
+	}
+	if calls != 4 {
+		t.Fatalf("expected 4 endpoint describe calls (2 RS × 2 pages), got %d", calls)
+	}
+	if len(result.RouteServers) != 2 {
+		t.Fatalf("expected 2 route servers, got %d", len(result.RouteServers))
+	}
+	if len(result.NeighborsByAZ["us-east-1a"]) != 2 {
+		t.Errorf("expected 2 neighbors in us-east-1a, got %d", len(result.NeighborsByAZ["us-east-1a"]))
+	}
+}
+
+func TestListAllPeers_PaginatesPeers(t *testing.T) {
+	const wantEndpoint = "rse-a1"
+	calls := 0
+	mock := &mockEC2{
+		describePeersFunc: func(input *ec2.DescribeRouteServerPeersInput) (*ec2.DescribeRouteServerPeersOutput, error) {
+			calls++
+			if input.NextToken == nil {
+				return &ec2.DescribeRouteServerPeersOutput{
+					RouteServerPeers: []ec2types.RouteServerPeer{
+						{RouteServerPeerId: aws.String("rsp-1"), RouteServerEndpointId: aws.String("rse-a1"), PeerAddress: aws.String("10.0.1.10")},
+					},
+					NextToken: aws.String("peers-2"),
+				}, nil
+			}
+			if aws.ToString(input.NextToken) != "peers-2" {
+				t.Fatalf("unexpected NextToken %q", aws.ToString(input.NextToken))
+			}
+			return &ec2.DescribeRouteServerPeersOutput{
+				RouteServerPeers: []ec2types.RouteServerPeer{
+					{RouteServerPeerId: aws.String("rsp-2"), RouteServerEndpointId: aws.String("rse-a1"), PeerAddress: aws.String("10.0.1.11")},
+					{RouteServerPeerId: aws.String("rsp-other"), RouteServerEndpointId: aws.String("rse-other"), PeerAddress: aws.String("10.0.9.9")},
+				},
+			}, nil
+		},
+	}
+	p := &Platform{ec2Client: mock}
+	peers, err := p.listAllPeers(context.Background(), wantEndpoint)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if calls != 2 {
+		t.Fatalf("expected 2 DescribeRouteServerPeers calls, got %d", calls)
+	}
+	if len(peers) != 2 {
+		t.Fatalf("expected 2 peers for %s across pages, got %d", wantEndpoint, len(peers))
+	}
+}
+
+func TestListAllPeers_EmptyStringNextTokenStops(t *testing.T) {
+	calls := 0
+	mock := &mockEC2{
+		describePeersFunc: func(input *ec2.DescribeRouteServerPeersInput) (*ec2.DescribeRouteServerPeersOutput, error) {
+			calls++
+			if input.NextToken != nil {
+				t.Fatalf("expected no second page call, got NextToken %q", aws.ToString(input.NextToken))
+			}
+			return &ec2.DescribeRouteServerPeersOutput{
+				RouteServerPeers: []ec2types.RouteServerPeer{
+					{RouteServerPeerId: aws.String("rsp-1"), RouteServerEndpointId: aws.String("rse-a1"), PeerAddress: aws.String("10.0.1.10")},
+				},
+				NextToken: aws.String(""),
+			}, nil
+		},
+	}
+	p := &Platform{ec2Client: mock}
+	peers, err := p.listAllPeers(context.Background(), "rse-a1")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if calls != 1 {
+		t.Fatalf("expected 1 call when NextToken is empty string, got %d", calls)
+	}
+	if len(peers) != 1 {
+		t.Fatalf("expected 1 peer, got %d", len(peers))
+	}
+}
+
+func TestListAllPeers_Page2Error(t *testing.T) {
+	mock := &mockEC2{
+		describePeersFunc: func(input *ec2.DescribeRouteServerPeersInput) (*ec2.DescribeRouteServerPeersOutput, error) {
+			if input.NextToken == nil {
+				return &ec2.DescribeRouteServerPeersOutput{
+					RouteServerPeers: []ec2types.RouteServerPeer{
+						{RouteServerPeerId: aws.String("rsp-1"), RouteServerEndpointId: aws.String("rse-a1"), PeerAddress: aws.String("10.0.1.10")},
+					},
+					NextToken: aws.String("peers-2"),
+				}, nil
+			}
+			return nil, errors.New("ec2 API failure on page 2")
+		},
+	}
+	p := &Platform{ec2Client: mock}
+	_, err := p.listAllPeers(context.Background(), "rse-a1")
+	if err == nil {
+		t.Fatal("expected error on page 2 failure")
+	}
+}
+
+func TestReconcilePeers_DeleteStalePeerOnPage2(t *testing.T) {
+	managedTag := []ec2types.Tag{{Key: aws.String("managed-by"), Value: aws.String("cudn-bgp-routing-operator/test-cluster")}}
+	mock := &mockEC2{
+		describePeersFunc: func(input *ec2.DescribeRouteServerPeersInput) (*ec2.DescribeRouteServerPeersOutput, error) {
+			if input.NextToken == nil {
+				return &ec2.DescribeRouteServerPeersOutput{
+					RouteServerPeers: []ec2types.RouteServerPeer{
+						{PeerAddress: aws.String("10.0.1.1"), RouteServerPeerId: aws.String("peer-other"), RouteServerEndpointId: aws.String("ep-other")},
+					},
+					NextToken: aws.String("peers-2"),
+				}, nil
+			}
+			return &ec2.DescribeRouteServerPeersOutput{
+				RouteServerPeers: []ec2types.RouteServerPeer{
+					{
+						PeerAddress:           aws.String("10.0.1.99"),
+						RouteServerPeerId:     aws.String("peer-stale"),
+						RouteServerEndpointId: aws.String("ep-a1"),
+						Tags:                  managedTag,
+					},
+				},
+			}, nil
+		},
+	}
+	p := &Platform{
+		ec2Client:     mock,
+		endpointsByAZ: map[string][]string{"us-east-1a": {"ep-a1"}},
+		localASN:      65001,
+		clusterID:     "test-cluster",
+	}
+
+	if err := p.reconcileRouteServerPeers(context.Background(), nil); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(mock.deletePeerCalls) != 1 {
+		t.Fatalf("expected 1 delete call, got %d", len(mock.deletePeerCalls))
+	}
+	if aws.ToString(mock.deletePeerCalls[0].RouteServerPeerId) != "peer-stale" {
+		t.Errorf("expected delete of peer-stale, got %s", aws.ToString(mock.deletePeerCalls[0].RouteServerPeerId))
+	}
+}
+
+func TestCleanup_DeletesManagedPeerOnPage2(t *testing.T) {
+	managedTag := []ec2types.Tag{{Key: aws.String("managed-by"), Value: aws.String("cudn-bgp-routing-operator/test-cluster")}}
+	mock := &mockEC2{
+		describePeersFunc: func(input *ec2.DescribeRouteServerPeersInput) (*ec2.DescribeRouteServerPeersOutput, error) {
+			if input.NextToken == nil {
+				return &ec2.DescribeRouteServerPeersOutput{
+					RouteServerPeers: []ec2types.RouteServerPeer{
+						{PeerAddress: aws.String("10.0.0.9"), RouteServerPeerId: aws.String("peer-other"), RouteServerEndpointId: aws.String("ep-other")},
+					},
+					NextToken: aws.String("peers-2"),
+				}, nil
+			}
+			return &ec2.DescribeRouteServerPeersOutput{
+				RouteServerPeers: []ec2types.RouteServerPeer{
+					{PeerAddress: aws.String("10.0.0.1"), RouteServerPeerId: aws.String("peer-ep-a1"), RouteServerEndpointId: aws.String("ep-a1"), Tags: managedTag},
+				},
+			}, nil
+		},
+	}
+	p := &Platform{
+		ec2Client: mock,
+		endpointsByAZ: map[string][]string{
+			"us-east-1a": {"ep-a1"},
+		},
+		clusterID: "test-cluster",
+	}
+
+	if err := p.Cleanup(context.Background()); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(mock.deletePeerCalls) != 1 {
+		t.Fatalf("expected 1 delete call, got %d", len(mock.deletePeerCalls))
+	}
+	if aws.ToString(mock.deletePeerCalls[0].RouteServerPeerId) != "peer-ep-a1" {
+		t.Errorf("expected delete of peer-ep-a1, got %s", aws.ToString(mock.deletePeerCalls[0].RouteServerPeerId))
+	}
+}

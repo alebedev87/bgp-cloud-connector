@@ -16,7 +16,7 @@ FROM registry.access.redhat.com/ubi9/ubi-minimal:latest@sha256:7c372902c8d211db2
 LABEL maintainer="Red Hat, Inc."
 LABEL com.redhat.component="bgp-cloud-connector-operator"
 LABEL name="bgpcc/bgp-cloud-connector-rhel9-operator"
-LABEL version="0.1.0"
+LABEL version="0.0.1"
 LABEL cpe="cpe:/a:redhat:bgp_cloud_connector:0.1::el9"
 WORKDIR /
 COPY --from=builder /workspace/bin/manager /

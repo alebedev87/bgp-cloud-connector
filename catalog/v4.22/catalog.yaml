@@ -10,7 +10,7 @@ name: alpha
 package: openshift-cudn-bgp-routing
 schema: olm.channel
 ---
-image: quay.io/redhat-user-workloads/bgp-cloud-connector-tenant/bgp-cloud-connector/bgp-cloud-connector-bundle@sha256:5ebb1565b4e1915f47f9e872264512ce3bb5305d1cee7e50648b2ac21af707a4
+image: registry.stage.redhat.io/bgpcc/bgp-cloud-connector-operator-bundle@sha256:b5f6fbdf44efd7177d42234fb9653653eaff99749accd50b37e10300f530eec2
 name: openshift-cudn-bgp-routing.v0.1.0
 package: openshift-cudn-bgp-routing
 properties:
@@ -24,16 +24,6 @@ properties:
     group: networking.openshift.io
     kind: CUDNBgpRouting
     version: v1alpha1
-- type: olm.gvk.required
-  value:
-    group: frrk8s.metallb.io
-    kind: FRRConfiguration
-    version: v1beta1
-- type: olm.gvk.required
-  value:
-    group: k8s.ovn.org
-    kind: ClusterUserDefinedNetwork
-    version: v1
 - type: olm.package
   value:
     packageName: openshift-cudn-bgp-routing
@@ -83,12 +73,21 @@ properties:
         ]
       capabilities: Basic Install
       categories: Networking
-      containerImage: quay.io/redhat-user-workloads/bgp-cloud-connector-tenant/bgp-cloud-connector/bgp-cloud-connector-operator@sha256:ca8e00390ae0f2fe6bc87590b8c8ed84094c179eb8e5e6b62cda06d67f052466
-      createdAt: "2026-07-31T10:07:33Z"
+      containerImage: registry.stage.redhat.io/bgpcc/bgp-cloud-connector-rhel9-operator@sha256:c248b1431c04ef03c2234db7748e05ff83757c413415404a5188f34f39450942
+      createdAt: "2026-08-14T13:01:18Z"
       description: Automates L3 direct routing between CUDN Pod networks and external
         networks via BGP on OpenShift. Cloud platform aware — auto-discovers BGP infrastructure
         on AWS (VPC Route Server) and works on-premise with explicit configuration.
+      features.operators.openshift.io/disconnected: "false"
+      features.operators.openshift.io/fips-compliant: "false"
+      features.operators.openshift.io/proxy-aware: "false"
+      features.operators.openshift.io/tls-profiles: "false"
+      features.operators.openshift.io/token-auth-aws: "false"
+      features.operators.openshift.io/token-auth-azure: "false"
+      features.operators.openshift.io/token-auth-gcp: "false"
       operatorframework.io/suggested-namespace: openshift-cudn-bgp-routing
+      operators.openshift.io/valid-subscription: '["OpenShift Kubernetes Engine",
+        "OpenShift Container Platform", "OpenShift Platform Plus"]'
       operators.operatorframework.io/builder: operator-sdk-v1.42.2
       operators.operatorframework.io/project_layout: go.kubebuilder.io/v4
     apiServiceDefinitions: {}
@@ -107,17 +106,6 @@ properties:
         kind: CUDNBgpRouting
         name: cudnbgproutings.networking.openshift.io
         version: v1alpha1
-      required:
-      - description: FRR-K8s BGP configuration.
-        displayName: FRR Configuration
-        kind: FRRConfiguration
-        name: frrconfigurations.frrk8s.metallb.io
-        version: v1beta1
-      - description: OVN Cluster User Defined Network.
-        displayName: Cluster User Defined Network
-        kind: ClusterUserDefinedNetwork
-        name: clusteruserdefinednetworks.k8s.ovn.org
-        version: v1
     description: |
       CUDN BGP Routing Operator automates L3 direct routing between
       Cluster User Defined Networks (CUDN) and external networks via BGP
@@ -143,8 +131,8 @@ properties:
     provider:
       name: Red Hat
 relatedImages:
-- image: quay.io/redhat-user-workloads/bgp-cloud-connector-tenant/bgp-cloud-connector/bgp-cloud-connector-operator@sha256:ca8e00390ae0f2fe6bc87590b8c8ed84094c179eb8e5e6b62cda06d67f052466
-  name: bgp-cloud-connector-operator
-- image: quay.io/redhat-user-workloads/bgp-cloud-connector-tenant/bgp-cloud-connector/bgp-cloud-connector-bundle@sha256:5ebb1565b4e1915f47f9e872264512ce3bb5305d1cee7e50648b2ac21af707a4
+- image: registry.stage.redhat.io/bgpcc/bgp-cloud-connector-operator-bundle@sha256:b5f6fbdf44efd7177d42234fb9653653eaff99749accd50b37e10300f530eec2
+  name: ""
+- image: registry.stage.redhat.io/bgpcc/bgp-cloud-connector-rhel9-operator@sha256:c248b1431c04ef03c2234db7748e05ff83757c413415404a5188f34f39450942
   name: ""
 schema: olm.bundle

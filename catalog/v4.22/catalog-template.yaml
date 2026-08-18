@@ -9,7 +9,7 @@ entries:
   name: alpha
   package: bgp-cloud-connector
   schema: olm.channel
-- image: registry.stage.redhat.io/bgpcc/bgp-cloud-connector-operator-bundle@sha256:f952d61b4067f2482b558fa7e5a55242ba793be35ae8afe449a6cc2291bbb4a2
+- image: registry.redhat.io/bgpcc/bgp-cloud-connector-operator-bundle@sha256:b2a438ed7fa6ac086d5640bbd8c78e2aaaa6e467db522294368bb05402d83794
   name: bgp-cloud-connector.v0.0.1
   schema: olm.bundle
 schema: olm.template.basic

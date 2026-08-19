@@ -26,5 +26,12 @@ yaml.width = 4096
 
 csv = yaml.load(content)
 
+csv['spec']['relatedImages'] = [
+    {
+        'name': 'bgp-cloud-connector',
+        'image': operator_pullspec,
+    },
+]
+
 with open(csv_file, 'w') as f:
     yaml.dump(csv, f)

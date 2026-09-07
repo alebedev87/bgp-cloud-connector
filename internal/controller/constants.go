@@ -28,7 +28,7 @@ const (
 	FRRNamespace  = "openshift-frr-k8s"
 	// DefaultOperatorNamespace is where the operator runs unless the
 	// Deployment says otherwise through POD_NAMESPACE.
-	DefaultOperatorNamespace = "bgp-cloud-connector"
+	DefaultOperatorNamespace = "openshift-bgp-cloud-connector"
 	FRRConfigNamePrefix      = "bgp-cc-"
 	ClusterUDNNamePrefix     = "cluster-udn-"
 	RouteAdvertisementName   = "bgp-cc-route-advertisements"

@@ -5,7 +5,7 @@ metadata:
     app.kubernetes.io/managed-by: kustomize
     app.kubernetes.io/name: openshift-bgp-cloud-connector
     control-plane: controller-manager
-  name: openshift-bgp-cloud-connector-controller-manager-metrics-monitor
+  name: openshift-bgp-cloud-connector-controller-metrics-monitor
 spec:
   endpoints:
   - bearerTokenFile: /var/run/secrets/kubernetes.io/serviceaccount/token
@@ -14,7 +14,7 @@ spec:
     scheme: https
     tlsConfig:
       caFile: /etc/prometheus/configmaps/serving-certs-ca-bundle/service-ca.crt
-      serverName: openshift-bgp-cloud-connector-controller-manager-metrics-service.openshift-bgp-cloud-connector.svc
+      serverName: openshift-bgp-cloud-connector-controller-metrics-service.openshift-bgp-cloud-connector.svc
   namespaceSelector:
     matchNames:
     - openshift-bgp-cloud-connector

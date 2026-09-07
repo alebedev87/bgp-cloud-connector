@@ -8,7 +8,7 @@ metadata:
     app.kubernetes.io/managed-by: kustomize
     app.kubernetes.io/name: openshift-bgp-cloud-connector
     control-plane: controller-manager
-  name: openshift-bgp-cloud-connector-controller-manager-metrics-service
+  name: openshift-bgp-cloud-connector-controller-metrics-service
 spec:
   ports:
   - name: https

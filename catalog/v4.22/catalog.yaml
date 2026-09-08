@@ -24,13 +24,13 @@ properties:
 - type: olm.gvk
   value:
     group: networking.openshift.io
-    kind: BGPCloudConfiguration
-    version: v1beta1
+    kind: CUDNBgpConfig
+    version: v1alpha1
 - type: olm.gvk
   value:
     group: networking.openshift.io
-    kind: BGPRouting
-    version: v1beta1
+    kind: CUDNBgpRouting
+    version: v1alpha1
 - type: olm.package
   value:
     packageName: bgp-cloud-connector
@@ -41,25 +41,21 @@ properties:
       alm-examples: |-
         [
           {
-            "apiVersion": "networking.openshift.io/v1beta1",
-            "kind": "BGPCloudConfiguration",
+            "apiVersion": "networking.openshift.io/v1alpha1",
+            "kind": "CUDNBgpConfig",
             "metadata": {
               "name": "cluster"
             },
             "spec": {
-              "platform": "Manual",
-              "bgp": {
-                "localASN": 65001,
-                "livenessDetection": "bgp-keepalive",
-                "peerGroups": [
-                  {
-                    "nodeSelector": {"bgp_router_subnet": "1"},
-                    "neighbors": [
-                      {"address": "10.0.1.47", "remoteASN": 64512},
-                      {"address": "10.0.1.183", "remoteASN": 64512}
-                    ]
-                  }
+              "aws": {
+                "region": "us-east-1",
+                "routeServerIDs": [
+                  "rs-0abc123456789abcd"
                 ]
+              },
+              "bgp": {
+                "livenessDetection": "bgp-keepalive",
+                "localASN": 65001
               },
               "routerNodeSelector": {
                 "bgp_router": "true"
@@ -67,8 +63,8 @@ properties:
             }
           },
           {
-            "apiVersion": "networking.openshift.io/v1beta1",
-            "kind": "BGPRouting",
+            "apiVersion": "networking.openshift.io/v1alpha1",
+            "kind": "CUDNBgpRouting",
             "metadata": {
               "name": "cudn1"
             },
@@ -93,10 +89,10 @@ properties:
       features.operators.openshift.io/fips-compliant: "false"
       features.operators.openshift.io/proxy-aware: "false"
       features.operators.openshift.io/tls-profiles: "false"
-      features.operators.openshift.io/token-auth-aws: "true"
+      features.operators.openshift.io/token-auth-aws: "false"
       features.operators.openshift.io/token-auth-azure: "false"
       features.operators.openshift.io/token-auth-gcp: "false"
-      operatorframework.io/suggested-namespace: openshift-bgp-cloud-connector
+      operatorframework.io/suggested-namespace: openshift-cudn-bgp-routing
       operators.openshift.io/valid-subscription: '["OpenShift Kubernetes Engine",
         "OpenShift Container Platform", "OpenShift Platform Plus"]'
       operators.operatorframework.io/builder: operator-sdk-v1.42.2
@@ -104,25 +100,24 @@ properties:
     apiServiceDefinitions: {}
     crdDescriptions:
       owned:
-      - description: BGPCloudConfiguration is the singleton cluster-scoped BGP infrastructure
+      - description: CUDNBgpConfig is the singleton cluster-scoped BGP infrastructure
           configuration.
-        displayName: BGP Cloud Configuration
-        kind: BGPCloudConfiguration
-        name: bgpcloudconfigurations.networking.openshift.io
-        version: v1beta1
+        displayName: CUDNBgp Config
+        kind: CUDNBgpConfig
+        name: cudnbgpconfigs.networking.openshift.io
+        version: v1alpha1
       - description: |-
-          BGPRouting declares a single network to advertise via BGP.
-          Users must pre-create and label namespaces; the operator manages only the
-          ClusterUserDefinedNetwork and RouteAdvertisements.
-        displayName: BGP Routing
-        kind: BGPRouting
-        name: bgproutings.networking.openshift.io
-        version: v1beta1
+          CUDNBgpRouting declares a single CUDN network to advertise via BGP.
+          Users must pre-create and label namespaces; the operator manages only the CUDN and RouteAdvertisements.
+        displayName: CUDNBgp Routing
+        kind: CUDNBgpRouting
+        name: cudnbgproutings.networking.openshift.io
+        version: v1alpha1
     description: |
       **Important:** This is a preview release for internal testing purposes only.
       It is not supported by Red Hat and is not intended for production use by customers.
 
-      BGP cloud connector automates L3 direct routing between
+      CUDN BGP Routing Operator automates L3 direct routing between
       Cluster User Defined Networks (CUDN) and external networks via BGP
       on OpenShift. Core BGP and CUDN functionality works on any OpenShift
       cluster with external BGP servers. When platform configuration is

@@ -88,6 +88,13 @@ func isOurPeering(name, clusterID string) bool {
 func (p *Platform) ReconcileNodes(ctx context.Context, nodes []platform.RouterNode) error {
 	logger := log.FromContext(ctx)
 
+	// An empty node list is a transient selector gap, not a release request;
+	// Cleanup handles actual deletion.
+	if len(nodes) == 0 {
+		logger.Info("no router nodes matched; leaving Route Server peerings as they are")
+		return nil
+	}
+
 	vms, err := toVirtualMachines(nodes)
 	if err != nil {
 		return err

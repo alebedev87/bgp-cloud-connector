@@ -2,6 +2,7 @@ package azure
 
 import (
 	"context"
+	"strings"
 	"testing"
 
 	"github.com/openshift/bgp-cloud-connector/internal/platform"
@@ -235,6 +236,118 @@ func TestDiscoverEndpoints_Refusals(t *testing.T) {
 		if _, err := p.DiscoverEndpoints(context.Background()); err == nil {
 			t.Errorf("%s: expected a refusal", name)
 		}
+	}
+}
+
+// TestToVirtualMachines_WrapsBadProviderIDWithNodeName pins that a node that
+// cannot be resolved to a VM fails with its own name in the error, since
+// "not an Azure VM provider ID" alone does not say which of several router
+// nodes is the problem.
+func TestToVirtualMachines_WrapsBadProviderIDWithNodeName(t *testing.T) {
+	nodes := []platform.RouterNode{
+		{Name: "good-node", ProviderID: testProviderID},
+		{Name: "bad-node", ProviderID: "not-a-provider-id"},
+	}
+	_, err := toVirtualMachines(nodes)
+	if err == nil {
+		t.Fatal("expected an error for the unparseable node")
+	}
+	if !strings.Contains(err.Error(), "bad-node") {
+		t.Errorf("error %q does not name the offending node", err.Error())
+	}
+}
+
+// TestReconcileNodes_ForwardingFailureSkipsPeering pins the ordering the code
+// comments call out: a node whose interface cannot be found for forwarding
+// must not reach peering reconciliation, since a peering to a node dropping
+// forwarded packets is the failure that looks healthy.
+func TestReconcileNodes_ForwardingFailureSkipsPeering(t *testing.T) {
+	rs := &fakeRS{}
+	p := &Platform{
+		cfg:  Config{ClusterID: "cluster", LocalASN: 65001},
+		rs:   rs,
+		nics: &fakeNICs{}, // no NICs, so forwarding cannot find one
+	}
+
+	nodes := []platform.RouterNode{{Name: "n1", PrivateIP: "10.0.128.4", ProviderID: testProviderID}}
+	if err := p.ReconcileNodes(context.Background(), nodes); err == nil {
+		t.Fatal("expected the forwarding failure to be reported")
+	}
+	if rs.desired != nil {
+		t.Errorf("peering reconciliation ran despite the forwarding failure: %v", rs.desired)
+	}
+}
+
+// TestReconcileNodes_EnablesForwardingThenReconcilesPeerings covers the
+// success path end to end: the node's interface is turned on, and the
+// peering built from it reaches the Route Server.
+func TestReconcileNodes_EnablesForwardingThenReconcilesPeerings(t *testing.T) {
+	vm, err := ParseProviderID(testProviderID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	rs := &fakeRS{}
+	nics := &fakeNICs{nics: []NIC{{Name: "nic-1", ResourceGroup: vm.ResourceGroup, VMID: vm.ID}}}
+	p := &Platform{
+		cfg:  Config{ClusterID: "cluster", LocalASN: 65001, RouteServerName: "rs"},
+		rs:   rs,
+		nics: nics,
+	}
+
+	nodes := []platform.RouterNode{{Name: "n1", PrivateIP: "10.0.128.4", ProviderID: testProviderID}}
+	if err := p.ReconcileNodes(context.Background(), nodes); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(nics.enabled) != 1 || nics.enabled[0] != "nic-1" {
+		t.Errorf("enabled = %v, want [nic-1]", nics.enabled)
+	}
+	if len(rs.desired) != 1 || rs.desired[0].PeerIP != "10.0.128.4" || rs.desired[0].PeerASN != 65001 {
+		t.Errorf("desired peers = %+v", rs.desired)
+	}
+}
+
+// TestReconcileNodes_EmptyNodeListLeavesPeeringsAlone pins that an empty
+// node list leaves existing peerings alone instead of deleting them all.
+func TestReconcileNodes_EmptyNodeListLeavesPeeringsAlone(t *testing.T) {
+	rs := &fakeRS{current: []ObservedPeer{
+		{Peer: Peer{Name: peeringName("cluster", "10.0.128.4"), PeerIP: "10.0.128.4", PeerASN: 65001}},
+	}}
+	nics := &fakeNICs{}
+	p := &Platform{cfg: Config{ClusterID: "cluster", LocalASN: 65001}, rs: rs, nics: nics}
+
+	if err := p.ReconcileNodes(context.Background(), nil); err != nil {
+		t.Fatalf("ReconcileNodes on an empty node list: %v", err)
+	}
+	if rs.desired != nil {
+		t.Errorf("peering reconciliation ran on an empty node list: %v", rs.desired)
+	}
+	if len(nics.enabled) != 0 {
+		t.Errorf("forwarding was touched on an empty node list: %v", nics.enabled)
+	}
+}
+
+// TestReconcileNodes_ShrunkNodeListStillReconciles guards the early return
+// from swallowing the case it must not: a node list that has shrunk but is
+// not empty must still reach the Route Server, or a removed node keeps its
+// peering forever.
+func TestReconcileNodes_ShrunkNodeListStillReconciles(t *testing.T) {
+	vm, err := ParseProviderID(testProviderID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	rs := &fakeRS{current: []ObservedPeer{
+		{Peer: Peer{Name: peeringName("cluster", "10.0.128.4"), PeerIP: "10.0.128.4", PeerASN: 65001}},
+		{Peer: Peer{Name: peeringName("cluster", "10.0.128.5"), PeerIP: "10.0.128.5", PeerASN: 65001}},
+	}}
+	nics := &fakeNICs{nics: []NIC{{Name: "nic-1", ResourceGroup: vm.ResourceGroup, VMID: vm.ID}}}
+	p := &Platform{cfg: Config{ClusterID: "cluster", LocalASN: 65001}, rs: rs, nics: nics}
+
+	nodes := []platform.RouterNode{{Name: "n1", PrivateIP: "10.0.128.4", ProviderID: testProviderID}}
+	if err := p.ReconcileNodes(context.Background(), nodes); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(rs.desired) != 1 || rs.desired[0].PeerIP != "10.0.128.4" {
+		t.Errorf("desired peerings = %+v, want only the remaining node's", rs.desired)
 	}
 }
 

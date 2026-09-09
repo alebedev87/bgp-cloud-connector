@@ -5,10 +5,34 @@ import (
 	"fmt"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore/runtime"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/azidentity"
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v6"
 )
+
+// virtualHubsAPI is the subset of armnetwork.VirtualHubsClient this package
+// calls.
+type virtualHubsAPI interface {
+	Get(ctx context.Context, resourceGroupName, virtualHubName string, options *armnetwork.VirtualHubsClientGetOptions) (armnetwork.VirtualHubsClientGetResponse, error)
+}
+
+// interfacesAPI is the subset of armnetwork.InterfacesClient this package
+// calls; createOrUpdate collapses Begin+Poll like bgpMutatorAPI does.
+type interfacesAPI interface {
+	NewListPager(resourceGroupName string, options *armnetwork.InterfacesClientListOptions) *runtime.Pager[armnetwork.InterfacesClientListResponse]
+	Get(ctx context.Context, resourceGroupName, networkInterfaceName string, options *armnetwork.InterfacesClientGetOptions) (armnetwork.InterfacesClientGetResponse, error)
+	createOrUpdate(ctx context.Context, resourceGroupName, networkInterfaceName string, parameters armnetwork.Interface) error
+}
+
+type interfacesClientAdapter struct {
+	*armnetwork.InterfacesClient
+}
+
+func (a *interfacesClientAdapter) createOrUpdate(ctx context.Context, resourceGroupName, networkInterfaceName string, parameters armnetwork.Interface) error {
+	poller, err := a.BeginCreateOrUpdate(ctx, resourceGroupName, networkInterfaceName, parameters, nil)
+	return awaitPoller(ctx, poller, err)
+}
 
 // RouteServerTopology is the Route Server's BGP identity and the addresses
 // every router node peers with.
@@ -44,7 +68,7 @@ type NICClient interface {
 }
 
 type topologyClient struct {
-	hubs            *armnetwork.VirtualHubsClient
+	hubs            virtualHubsAPI
 	resourceGroup   string
 	routeServerName string
 }
@@ -90,7 +114,7 @@ func (c *topologyClient) GetTopology(ctx context.Context) (*RouteServerTopology,
 }
 
 type nicClient struct {
-	interfaces *armnetwork.InterfacesClient
+	interfaces interfacesAPI
 }
 
 // NewNICClient builds a NICClient.
@@ -120,7 +144,7 @@ func NewNICClient(subscriptionID, clientID string) (NICClient, error) {
 	if err != nil {
 		return nil, fmt.Errorf("azure network client factory: %w", err)
 	}
-	return &nicClient{interfaces: factory.NewInterfacesClient()}, nil
+	return &nicClient{interfaces: &interfacesClientAdapter{factory.NewInterfacesClient()}}, nil
 }
 
 func (c *nicClient) ListNICs(ctx context.Context, resourceGroup string) ([]NIC, error) {
@@ -167,10 +191,5 @@ func (c *nicClient) EnableIPForwarding(ctx context.Context, resourceGroup, name 
 	enabled := true
 	current.Properties.EnableIPForwarding = &enabled
 
-	poller, err := c.interfaces.BeginCreateOrUpdate(ctx, resourceGroup, name, current.Interface, nil)
-	if err != nil {
-		return err
-	}
-	_, err = poller.PollUntilDone(ctx, nil)
-	return err
+	return c.interfaces.createOrUpdate(ctx, resourceGroup, name, current.Interface)
 }

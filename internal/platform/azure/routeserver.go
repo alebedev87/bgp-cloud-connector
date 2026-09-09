@@ -5,18 +5,60 @@ import (
 	"fmt"
 	"sort"
 
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore/runtime"
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/to"
 	"github.com/Azure/azure-sdk-for-go/sdk/azidentity"
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v6"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 )
 
+// bgpListerAPI is the subset of armnetwork.VirtualHubBgpConnectionsClient this
+// package calls.
+type bgpListerAPI interface {
+	NewListPager(resourceGroupName, virtualHubName string, options *armnetwork.VirtualHubBgpConnectionsClientListOptions) *runtime.Pager[armnetwork.VirtualHubBgpConnectionsClientListResponse]
+}
+
+// bgpMutatorAPI collapses armnetwork.VirtualHubBgpConnectionClient's
+// Begin+Poll create/update/delete calls into synchronous ones; see
+// awaitPoller.
+type bgpMutatorAPI interface {
+	createOrUpdate(ctx context.Context, resourceGroup, routeServerName, name string, params armnetwork.BgpConnection) error
+	delete(ctx context.Context, resourceGroup, routeServerName, name string) error
+}
+
+// awaitPoller collapses a Begin+Poll pair into one call: no fake can produce
+// the concrete Poller[T] Begin returns, and nothing here needs it mid-flight.
+// The failing phase (begin vs poll) stays in the error text for triage.
+func awaitPoller[T any](ctx context.Context, poller *runtime.Poller[T], beginErr error) error {
+	if beginErr != nil {
+		return fmt.Errorf("begin: %w", beginErr)
+	}
+	if _, err := poller.PollUntilDone(ctx, nil); err != nil {
+		return fmt.Errorf("poll: %w", err)
+	}
+	return nil
+}
+
+type bgpConnectionMutator struct {
+	client *armnetwork.VirtualHubBgpConnectionClient
+}
+
+func (m *bgpConnectionMutator) createOrUpdate(ctx context.Context, resourceGroup, routeServerName, name string, params armnetwork.BgpConnection) error {
+	poller, err := m.client.BeginCreateOrUpdate(ctx, resourceGroup, routeServerName, name, params, nil)
+	return awaitPoller(ctx, poller, err)
+}
+
+func (m *bgpConnectionMutator) delete(ctx context.Context, resourceGroup, routeServerName, name string) error {
+	poller, err := m.client.BeginDelete(ctx, resourceGroup, routeServerName, name, nil)
+	return awaitPoller(ctx, poller, err)
+}
+
 // RouteServerBackend manages Azure Route Server BGP peerings.
 type RouteServerBackend struct {
 	ResourceGroup   string
 	RouteServerName string
-	ListClient      *armnetwork.VirtualHubBgpConnectionsClient
-	MutateClient    *armnetwork.VirtualHubBgpConnectionClient
+	ListClient      bgpListerAPI
+	MutateClient    bgpMutatorAPI
 }
 
 type peerKey struct {
@@ -41,7 +83,7 @@ func NewRouteServerBackend(subscriptionID, resourceGroup, routeServerName string
 		ResourceGroup:   resourceGroup,
 		RouteServerName: routeServerName,
 		ListClient:      factory.NewVirtualHubBgpConnectionsClient(),
-		MutateClient:    factory.NewVirtualHubBgpConnectionClient(),
+		MutateClient:    &bgpConnectionMutator{client: factory.NewVirtualHubBgpConnectionClient()},
 	}, nil
 }
 
@@ -175,12 +217,8 @@ func (b *RouteServerBackend) createOrUpdate(ctx context.Context, peer Peer) erro
 			PeerIP:  to.Ptr(peer.PeerIP),
 		},
 	}
-	poller, err := b.MutateClient.BeginCreateOrUpdate(ctx, b.ResourceGroup, b.RouteServerName, peer.Name, params, nil)
-	if err != nil {
+	if err := b.MutateClient.createOrUpdate(ctx, b.ResourceGroup, b.RouteServerName, peer.Name, params); err != nil {
 		return fmt.Errorf("create/update peering %q: %w", peer.Name, err)
-	}
-	if _, err := poller.PollUntilDone(ctx, nil); err != nil {
-		return fmt.Errorf("wait for peering %q: %w", peer.Name, err)
 	}
 	log.Info("Azure Route Server BGP peering create or update completed",
 		"resourceGroup", b.ResourceGroup,
@@ -199,12 +237,8 @@ func (b *RouteServerBackend) delete(ctx context.Context, name string) error {
 		"routeServer", b.RouteServerName,
 		"peeringName", name,
 	)
-	poller, err := b.MutateClient.BeginDelete(ctx, b.ResourceGroup, b.RouteServerName, name, nil)
-	if err != nil {
+	if err := b.MutateClient.delete(ctx, b.ResourceGroup, b.RouteServerName, name); err != nil {
 		return fmt.Errorf("delete peering %q: %w", name, err)
-	}
-	if _, err := poller.PollUntilDone(ctx, nil); err != nil {
-		return fmt.Errorf("wait for delete peering %q: %w", name, err)
 	}
 	log.Info("Azure Route Server BGP peering delete completed",
 		"resourceGroup", b.ResourceGroup,

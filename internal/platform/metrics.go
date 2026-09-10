@@ -10,7 +10,7 @@ import (
 // one provider's package: a dashboard or alert can then ask the same question
 // of AWS, Azure and GCP and get an answer in the same shape.
 
-// Platform label values — match api/v1alpha1 PlatformType for AWS, Azure, GCP.
+// Platform label values — match api/v1beta1 PlatformType for AWS, Azure, GCP.
 // The label set is closed on purpose: a free-form value here would make every
 // new spelling a new time series.
 const (

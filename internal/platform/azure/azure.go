@@ -162,7 +162,7 @@ func (p *Platform) countManagedPeers(ctx context.Context, nodes []platform.Route
 	current, err := p.rs.ListPeers(ctx)
 	if err != nil {
 		platform.RecordCloudAPIError(platform.PlatformAzure, platform.OpPeer)
-		return 0, err
+		return 0, fmt.Errorf("counting managed peers: %w", err)
 	}
 	desiredIPs := make(map[string]bool, len(nodes))
 	for _, n := range nodes {

@@ -117,6 +117,16 @@ check "print_fields drops empty fields rather than emitting blank lines" \
 check "print_fields handles a newline separated result too" \
     "$(print_fields "$(printf 'a\nb')" | tr '\n' ' ')" "a b "
 
+# An unquoted expansion splits on IFS and expands pathnames, and only
+# the first of those is wanted. A field carrying a glob character would
+# otherwise be replaced by whatever the working directory happens to
+# hold, which is a value the cloud never printed.
+mkdir -p "${workdir}/globtest"
+: >"${workdir}/globtest/decoy"
+check "print_fields does not expand a field against the filesystem" \
+    "$(cd "${workdir}/globtest" && print_fields "$(printf 'a\t*\tb')" | tr '\n' ' ')" \
+    "a * b "
+
 # The point of it living here rather than in aws/lib.sh: a cloud that
 # does not source AWS's library still gets it.
 check "print_fields comes from common.sh alone" \

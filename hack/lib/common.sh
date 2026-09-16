@@ -153,6 +153,15 @@ wait_until() {
 # a failure that then has to be swallowed. Word splitting already drops
 # empty fields, so doing it here leaves no status to discard.
 print_fields() {
+    # The unquoted expansion below is deliberate: splitting on IFS is
+    # the whole job. Pathname expansion is not, and the same expansion
+    # does both, so without noglob a field carrying * or ? comes back as
+    # whatever the working directory happens to hold -- a value the
+    # cloud never printed. `local -` keeps the option to this function,
+    # so a caller that wants globbing keeps it.
+    local -
+    set -f
+
     local field
     for field in $1; do
         printf '%s\n' "${field}"

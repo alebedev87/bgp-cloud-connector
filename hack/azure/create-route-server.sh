@@ -223,9 +223,20 @@ ensure_address_prefix() {
         --query 'addressSpace.addressPrefixes' -o tsv)" \
         || die "cannot read the address space of ${vnet}"
 
+    # One pass answers both questions the address space is read for:
+    # whether our prefix is already there, and what the others are.
+    # The list is gathered even when the answer turns out to be yes and
+    # it goes unused, which is what reading the address space once
+    # instead of twice costs.
+    #
+    # The others are gathered because update replaces the list
+    # wholesale: they have to be repeated or they are dropped, which
+    # would orphan every subnet in the vnet.
     have=""
+    local -a all=()
     while read -r prefix; do
         [[ "${prefix}" == "${rs_cidr}" ]] && have="yes"
+        [[ -n "${prefix}" ]] && all+=("${prefix}")
     done < <(print_fields "${prefixes}")
 
     if [[ -n "${have}" ]]; then
@@ -238,13 +249,6 @@ ensure_address_prefix() {
     fi
 
     info "  adding ${rs_cidr} to ${vnet} (installer-owned; existing subnets untouched)"
-    # update replaces the list wholesale, so the existing prefixes have
-    # to be repeated or they are dropped, which would orphan every
-    # subnet in the vnet.
-    local -a all=()
-    while read -r prefix; do
-        [[ -n "${prefix}" ]] && all+=("${prefix}")
-    done < <(print_fields "${prefixes}")
     all+=("${rs_cidr}")
 
     # The record is written by the same call that widens the vnet, so

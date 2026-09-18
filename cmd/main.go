@@ -47,6 +47,7 @@ import (
 	networkingapi "github.com/openshift/bgp-cloud-connector/api/v1beta1"
 	"github.com/openshift/bgp-cloud-connector/internal/controller"
 	bgptls "github.com/openshift/bgp-cloud-connector/internal/tls"
+	"github.com/openshift/bgp-cloud-connector/internal/trustedca"
 	// +kubebuilder:scaffold:imports
 )
 
@@ -97,12 +98,14 @@ func main() {
 
 	ctrl.SetLogger(zap.New(zap.UseFlagOptions(&opts)))
 
+	// A cancellable context so the trusted CA watcher can stop the manager and
+	// let the Deployment restart the pod when the proxy CA bundle rotates.
 	ctx, cancel := context.WithCancel(ctrl.SetupSignalHandler())
 	defer cancel()
 
 	cfg := ctrl.GetConfigOrDie()
 
-	tlsProfileClient, err := client.New(cfg, client.Options{Scheme: scheme})
+	apiClient, err := client.New(cfg, client.Options{Scheme: scheme})
 	if err != nil {
 		setupLog.Error(err, "unable to create client")
 		os.Exit(1)
@@ -114,9 +117,15 @@ func main() {
 		os.Exit(1)
 	}
 
-	tlsProfile, err := bgptls.GetProfileInfo(logr.NewContext(ctx, setupLog), tlsProfileClient, discoveryClient)
+	tlsProfile, err := bgptls.GetProfileInfo(logr.NewContext(ctx, setupLog), apiClient, discoveryClient)
 	if err != nil {
 		setupLog.Error(err, "unable to get TLS profile options")
+		os.Exit(1)
+	}
+
+	trustedCAWatcher, err := trustedca.New(logr.NewContext(ctx, setupLog), apiClient, cancel)
+	if err != nil {
+		setupLog.Error(err, "unable to set up trusted CA configmap watcher")
 		os.Exit(1)
 	}
 
@@ -282,6 +291,11 @@ func main() {
 
 	if err := tlsProfile.SetupProfileWatch(logr.NewContext(ctx, setupLog), mgr, cancel); err != nil {
 		setupLog.Error(err, "unable to set up TLS profile watch")
+		os.Exit(1)
+	}
+
+	if err := trustedCAWatcher.SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to set up trusted CA configmap watcher")
 		os.Exit(1)
 	}
 

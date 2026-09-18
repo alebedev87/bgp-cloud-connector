@@ -351,6 +351,14 @@ spec:
         - apiGroups:
           - ""
           resourceNames:
+          - openshift-bgp-cloud-connector-trusted-ca
+          resources:
+          - configmaps
+          verbs:
+          - get
+        - apiGroups:
+          - ""
+          resourceNames:
           - bgp-cloud-connector-aws-credentials
           resources:
           - secrets

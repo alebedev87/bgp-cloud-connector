@@ -30,23 +30,8 @@ ci_aws_shared_credentials() {
     export AWS_SHARED_CREDENTIALS_FILE="${CLUSTER_PROFILE_DIR}/.awscred"
 }
 
-# Put a usable aws CLI on PATH. hack/aws/ensure-cli.sh decides whether
-# that means the one already installed or a download, and is also what
-# `make bin/aws` runs, so there is one implementation of it.
-#
-# Installing into the repository's bin rather than a scratch directory
-# is what keeps the sequencer's two children sharing a single download
-# instead of fetching sixty megabytes each.
-ci_ensure_aws_cli() {
-    local dir
-    dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/ensure-cli.sh"
-    dir="$("${dir}")" || die "could not provide an aws CLI"
-    export PATH="${dir}:${PATH}"
-}
-
 ci_bootstrap() {
     ci_aws_shared_credentials
     ci_use_shared_kubeconfig
     ci_make_workdir
-    ci_ensure_aws_cli
 }

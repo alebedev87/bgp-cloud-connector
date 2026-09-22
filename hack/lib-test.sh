@@ -88,9 +88,8 @@ rc=$?; elapsed=$((SECONDS - started))
 check "wait_until passes an abort straight back" "${rc}" "2"
 check "wait_until does not wait out the deadline on an abort" "$(( elapsed <= 2 ))" "1"
 
-# retry is for transient outside-world failures. The aws CLI download
-# runs after the cluster is up, so a single CDN blip there throws away a
-# forty-minute install.
+# retry is for transient outside-world failures, where the call is
+# right and the world was briefly not.
 flaky_calls=0
 flaky() { flaky_calls=$((flaky_calls + 1)); (( flaky_calls >= 3 )); }
 always_fails() { return 1; }

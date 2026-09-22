@@ -5,10 +5,8 @@
 # hack/lib/ci.sh, and it defines ci_bootstrap in terms of the
 # cloud-neutral pieces there.
 #
-# There is no ensure-cli step, unlike AWS. The build root carries no az
-# and there is no standalone binary to unzip -- az is a virtualenv --
-# so the job's image imports one from ocp:upi-installer at build time
-# instead of fetching anything at run time. See the ci-operator config.
+# Nothing here installs az. The job's e2e-runner image carries it, and
+# outside prow it is whatever you installed. See the ci-operator config.
 
 # shellcheck source=hack/lib/ci.sh
 source "$(cd "$(dirname "${BASH_SOURCE[0]}")/../lib" && pwd)/ci.sh"

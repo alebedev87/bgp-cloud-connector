@@ -146,25 +146,18 @@ test-scripts: ## Run unit tests for the shell under hack/.
 # apart from test-e2e-aws above, which runs the Go suite against a
 # cluster somebody else configured; these run the whole job, including
 # standing that cluster's estate up and tearing it down. One target per
-# platform, each depending on the CLI its scripts need, so Azure and GCP
-# slot in beside this as their scripts land.
+# platform, so Azure and GCP slot in beside this as their scripts land.
+#
+# The CLI each script needs is expected on PATH: in prow it comes from
+# the e2e-runner image, and on a desk from whatever you installed. The
+# scripts require_cmd it and say so if it is missing.
 .PHONY: ci-e2e-aws
-ci-e2e-aws: bin/aws ## Run the AWS e2e job: stand the estate up, then tear it down.
+ci-e2e-aws: ## Run the AWS e2e job: stand the estate up, then tear it down.
 	./hack/ci-e2e-aws.sh
 
 .PHONY: ci-e2e-aws-teardown
-ci-e2e-aws-teardown: bin/aws ## Remove whatever an AWS e2e run left behind.
+ci-e2e-aws-teardown: ## Remove whatever an AWS e2e run left behind.
 	./hack/ci-e2e-aws-teardown.sh
-
-# A file target, so once something has been downloaded there is nothing
-# left to do. The script decides whether to download at all: with a new
-# enough aws already on PATH it installs nothing and this file is never
-# created, so on a machine that packages the CLI the rule re-runs every
-# time and costs a version check. That is the intended outcome, not an
-# oversight -- the archive AWS ships is linked for a generic Linux and
-# would not run here anyway.
-bin/aws: | $(LOCALBIN)
-	./hack/aws/ensure-cli.sh $(LOCALBIN) >/dev/null
 
 .PHONY: test-aws
 test-aws: ## Run AWS platform unit tests (mocked, no credentials needed).

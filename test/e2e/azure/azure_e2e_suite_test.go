@@ -137,7 +137,44 @@ var _ = BeforeSuite(func() {
 	Expect(err).NotTo(HaveOccurred())
 	peeringClient = factory.NewVirtualHubBgpConnectionsClient()
 	peeringMutator = factory.NewVirtualHubBgpConnectionClient()
-	nicClient = factory.NewInterfacesClient()
+
+	By("building the interface client from the cluster's own credentials")
+	// The estate is this suite's to own, and the credential above is the
+	// right one for it: the Route Server was built by the same principal
+	// that built the cluster's resource group. A node's interface is not
+	// ours in that sense, and on ARO it is not writable by us at all.
+	//
+	// The interface is joined to a load balancer backend pool in the group
+	// ARO manages, so a write carrying that linkage needs
+	// Microsoft.Network/loadBalancers/backendAddressPools/join/action on
+	// the pool, and the deny assignment there refuses it to every
+	// principal except the cluster's own. Measured: E2E-AZURE-03 turning
+	// forwarding off came back LinkedAuthorizationFailed, while the
+	// operator writes the same interface without trouble because the cloud
+	// credential operator hands it exactly that principal.
+	//
+	// kube-system/azure-credentials is what passthrough hands over on
+	// Azure, so reading it here makes the suite touch a node with the same
+	// rights as the operator it is testing. That is what a test simulating
+	// a change made behind the operator's back should have been doing
+	// anyway; ARO is only where the difference is fatal.
+	//
+	// Deliberately not used for the Route Server clients above. On a
+	// self-managed install the cluster's principal holds a role built for
+	// what the installer does, which does not include virtual hubs.
+	credSecret, err := clientset.CoreV1().Secrets("kube-system").
+		Get(context.Background(), "azure-credentials", metav1.GetOptions{})
+	Expect(err).NotTo(HaveOccurred(), "reading kube-system/azure-credentials")
+	clusterCred, err := azidentity.NewClientSecretCredential(
+		string(credSecret.Data["azure_tenant_id"]),
+		string(credSecret.Data["azure_client_id"]),
+		string(credSecret.Data["azure_client_secret"]),
+		nil,
+	)
+	Expect(err).NotTo(HaveOccurred())
+	nodeFactory, err := armnetwork.NewClientFactory(bgpConfig.Spec.Azure.SubscriptionID, clusterCred, nil)
+	Expect(err).NotTo(HaveOccurred())
+	nicClient = nodeFactory.NewInterfacesClient()
 
 	By("reading cluster infrastructure name")
 	infra := &unstructured.Unstructured{}

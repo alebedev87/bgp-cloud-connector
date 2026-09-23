@@ -138,7 +138,7 @@ info "group:         ${rg}"
 route_server_exists() {
     local found
     found="$(az_query "look for a route server named ${rs}" \
-        az network routeserver list -g "${rg}" \
+        az network routeserver list -g "${net_rg}" \
         --query "[?name=='${rs}'].name | [0]" -o tsv)" || return 2
     [[ -n "${found}" && "${found}" != "None" ]]
 }
@@ -146,7 +146,7 @@ route_server_exists() {
 public_ip_exists() {
     local found
     found="$(az_query "look for a public IP named ${rs_pip}" \
-        az network public-ip list -g "${rg}" \
+        az network public-ip list -g "${net_rg}" \
         --query "[?name=='${rs_pip}'].name | [0]" -o tsv)" || return 2
     [[ -n "${found}" && "${found}" != "None" ]]
 }
@@ -197,7 +197,7 @@ delete_peerings() {
 
     local names
     names="$(az_query "list peerings on ${rs}" \
-        az network routeserver peering list -g "${rg}" --routeserver "${rs}" \
+        az network routeserver peering list -g "${net_rg}" --routeserver "${rs}" \
         --query '[].name' -o tsv)" || { fail "list peerings on ${rs}"; return 0; }
 
     if [[ -z "${names}" ]]; then
@@ -219,7 +219,7 @@ delete_peerings() {
     while read -r name; do
         info "  deleting peering ${name}"
         az_retry "delete peering ${name}" "${delete_budget}" \
-            az network routeserver peering delete -g "${rg}" \
+            az network routeserver peering delete -g "${net_rg}" \
             --routeserver "${rs}" -n "${name}" --yes --output none \
             || fail "delete peering ${name}"
     done < <(print_fields "${names}")
@@ -236,7 +236,7 @@ delete_route_server() {
     esac
     info "  deleting ${rs} -- slower than most of this, though quicker than creating it"
     az_retry "delete route server ${rs}" "${delete_budget}" \
-        az network routeserver delete -g "${rg}" -n "${rs}" --yes --output none \
+        az network routeserver delete -g "${net_rg}" -n "${rs}" --yes --output none \
         || fail "delete route server ${rs}"
 }
 
@@ -248,7 +248,7 @@ delete_public_ip() {
         2) fail "cannot tell whether the public IP ${rs_pip} exists"; return 0 ;;
     esac
     az_retry "delete public IP ${rs_pip}" "${delete_budget}" \
-        az network public-ip delete -g "${rg}" -n "${rs_pip}" --output none \
+        az network public-ip delete -g "${net_rg}" -n "${rs_pip}" --output none \
         || fail "delete public IP ${rs_pip}"
 }
 

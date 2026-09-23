@@ -169,9 +169,28 @@ azure_cluster_vnet() {
     # Azure prints the literal None for a query that matched nothing.
     [[ "${vnet}" == "None" ]] && vnet=""
     if [[ -z "${vnet}" ]]; then
-        warn "no vnet in ${group} tagged ${tag}=owned;" \
-             "falling back to the name ${cluster}-vnet"
-        vnet="${cluster}-vnet"
+        # Nothing claims to own one. Before guessing a name, ask what is
+        # actually there: a group holding exactly one virtual network
+        # answers the question without guessing at all.
+        #
+        # ARO is that case, and it is why the guess is not good enough.
+        # It tags nothing, and it names the network for the resource
+        # group rather than for the cluster, so ${cluster}-vnet is a name
+        # that does not exist and everything built into it goes somewhere
+        # nobody looks.
+        local all count
+        all="$(az_query "list virtual networks in ${group}" \
+            az network vnet list -g "${group}" --query "[].name" -o tsv)" || return 1
+        count="$(grep -c . <<<"${all}")"
+        if [[ "${count}" == 1 ]]; then
+            vnet="$(grep -m 1 . <<<"${all}")"
+            warn "no vnet in ${group} tagged ${tag}=owned;" \
+                 "taking the only one there, ${vnet}"
+        else
+            warn "no vnet in ${group} tagged ${tag}=owned, and ${count} to choose from;" \
+                 "falling back to the name ${cluster}-vnet"
+            vnet="${cluster}-vnet"
+        fi
     fi
     printf '%s' "${vnet}"
 }

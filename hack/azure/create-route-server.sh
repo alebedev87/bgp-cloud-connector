@@ -82,8 +82,8 @@ azure_cluster_facts
 azure_subscription >/dev/null \
     || die "az has no subscription selected" \
            "Pick one: az account set --subscription <id>"
-region="$(azure_group_location "${rg}")" \
-    || die "resource group ${rg} is not visible in the subscription az is pointed at" \
+region="$(azure_group_location "${net_rg}")" \
+    || die "resource group ${net_rg} is not visible in the subscription az is pointed at" \
            "The cluster is probably in a different subscription from that one." \
            "Switch: az account set --subscription <id>"
 vnet="$(azure_cluster_vnet "${net_rg}" "${infra}")" \
@@ -145,7 +145,7 @@ info "route server:  ${rs} (Azure fixes its ASN at 65515)"
 route_server_exists() {
     local found
     found="$(az_query "look for a route server named ${rs}" \
-        az network routeserver list -g "${rg}" \
+        az network routeserver list -g "${net_rg}" \
         --query "[?name=='${rs}'].name | [0]" -o tsv)" || return 2
     [[ -n "${found}" && "${found}" != "None" ]]
 }
@@ -153,7 +153,7 @@ route_server_exists() {
 public_ip_exists() {
     local found
     found="$(az_query "look for a public IP named ${rs_pip}" \
-        az network public-ip list -g "${rg}" \
+        az network public-ip list -g "${net_rg}" \
         --query "[?name=='${rs_pip}'].name | [0]" -o tsv)" || return 2
     [[ -n "${found}" && "${found}" != "None" ]]
 }
@@ -180,7 +180,7 @@ subnet_prefix() {
 # peer with, and the failure arrives later looking like BGP.
 route_server_addresses() {
     az_query "read the addresses of ${rs}" \
-        az network routeserver show -g "${rg}" -n "${rs}" \
+        az network routeserver show -g "${net_rg}" -n "${rs}" \
         --query 'virtualRouterIps[]' -o tsv
 }
 
@@ -306,7 +306,7 @@ ensure_public_ip() {
     esac
 
     info "  creating ${rs_pip} (Standard, static)"
-    try az network public-ip create -g "${rg}" -n "${rs_pip}" \
+    try az network public-ip create -g "${net_rg}" -n "${rs_pip}" \
         --sku Standard --allocation-method Static --version IPv4 \
         --location "${region}" --output none
 }
@@ -354,7 +354,7 @@ ensure_route_server() {
     fi
 
     info "  creating ${rs} -- expect this to take about fifteen minutes"
-    try az network routeserver create -g "${rg}" -n "${rs}" \
+    try az network routeserver create -g "${net_rg}" -n "${rs}" \
         --hosted-subnet "${subnet_id}" \
         --public-ip-address "${rs_pip}" \
         --location "${region}" --output none
@@ -397,11 +397,11 @@ case ${ready_rc} in
     *) die "${rs} still reports no addresses after ${ready_timeout}s" \
            "A Route Server peers from a redundant pair, and one with none has" \
            "not finished provisioning. Check it and rerun:" \
-           "  az network routeserver show -g ${rg} -n ${rs} -o json" ;;
+           "  az network routeserver show -g ${net_rg} -n ${rs} -o json" ;;
 esac
 
 rs_asn="$(az_query "read the ASN of ${rs}" \
-    az network routeserver show -g "${rg}" -n "${rs}" \
+    az network routeserver show -g "${net_rg}" -n "${rs}" \
     --query virtualRouterAsn -o tsv)" \
     || die "cannot read back the ASN of ${rs}"
 rs_ips="$(route_server_addresses)" \

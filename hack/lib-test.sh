@@ -746,19 +746,30 @@ echo "--- azure/lib.sh: azure_cluster_vnet ---"
 # nobody looks.
 
 stub_vnet=""
-# Reached through az_query's "$@" rather than by name.
+stub_vnet_all=""
+# Reached through az_query's "$@" rather than by name. The two vnet
+# queries are told apart by the tag filter, because they answer
+# different questions: which network the installer claims, and which
+# networks are there at all.
 # shellcheck disable=SC2329
 az() {
     case "$*" in
-        *"vnet list"*)
+        *"vnet list"*"tags."*)
             if (( stub_az_rc != 0 )); then
                 printf '%s\n' "ERROR: (AuthorizationFailed) not authorized" >&2
                 return "${stub_az_rc}"
             fi
             printf '%s' "${stub_vnet}" ;;
+        *"vnet list"*)
+            if (( stub_az_list_rc != 0 )); then
+                printf '%s\n' "ERROR: (AuthorizationFailed) not authorized" >&2
+                return "${stub_az_list_rc}"
+            fi
+            printf '%s' "${stub_vnet_all}" ;;
         *) echo "unstubbed az call: $*" >&2; return 1 ;;
     esac
 }
+stub_az_list_rc=0
 
 stub_vnet="mycluster-abcde-vnet"
 check "takes the vnet the installer tagged" \
@@ -766,7 +777,8 @@ check "takes the vnet the installer tagged" \
 
 # Azure prints the literal None for a query that matched nothing.
 stub_vnet="None"
-check "falls back to the installer's name when nothing is tagged" \
+stub_vnet_all="$(printf 'one\ntwo\n')"
+check "falls back to the installer's name when nothing is tagged and the group is ambiguous" \
     "$(azure_cluster_vnet net-rg mycluster-abcde 2>/dev/null)" "mycluster-abcde-vnet"
 check "and says so, rather than falling back silently" \
     "$(azure_cluster_vnet net-rg mycluster-abcde 2>&1 >/dev/null | grep -c 'falling back')" "1"
@@ -774,6 +786,27 @@ check "and says so, rather than falling back silently" \
 stub_vnet=""
 check "falls back on an empty answer too" \
     "$(azure_cluster_vnet net-rg mycluster-abcde 2>/dev/null)" "mycluster-abcde-vnet"
+
+# ARO tags nothing, and names its network for the group rather than for
+# the cluster, so the guess above lands on a name that does not exist. A
+# group holding exactly one virtual network is not a guess.
+stub_vnet="None"
+stub_vnet_all="aro-net"
+check "takes the only vnet in the group when nothing is tagged" \
+    "$(azure_cluster_vnet net-rg mycluster-abcde 2>/dev/null)" "aro-net"
+check "and says which one it took" \
+    "$(azure_cluster_vnet net-rg mycluster-abcde 2>&1 >/dev/null | grep -c 'aro-net')" "1"
+
+stub_vnet_all=""
+check "falls back to the name when the group holds none" \
+    "$(azure_cluster_vnet net-rg mycluster-abcde 2>/dev/null)" "mycluster-abcde-vnet"
+
+stub_az_list_rc=1
+stub_vnet_all=""
+azure_cluster_vnet net-rg mycluster-abcde >/dev/null 2>&1
+check "fails rather than guessing when the enumeration itself failed" "$?" "1"
+stub_az_list_rc=0
+stub_vnet_all="$(printf 'one\ntwo\n')"
 
 # The distinction this file exists to make.
 stub_az_rc=1

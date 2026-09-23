@@ -83,12 +83,12 @@ rs="${infra}-rs"
 # profile names it, and a profile naming one that does not exist fails
 # in the suite as a discovery problem rather than as a missing estate.
 rs_asn="$(az_query "read the ASN of ${rs}" \
-    az network routeserver list -g "${rg}" \
+    az network routeserver list -g "${net_rg}" \
     --query "[?name=='${rs}'].virtualRouterAsn | [0]" -o tsv)" \
-    || die "cannot read the Route Server ${rs} in ${rg}"
+    || die "cannot read the Route Server ${rs} in ${net_rg}"
 
 [[ -n "${rs_asn}" && "${rs_asn}" != "None" ]] \
-    || die "no Route Server named ${rs} in ${rg}" \
+    || die "no Route Server named ${rs} in ${net_rg}" \
            "Stand one up first: hack/azure/create-route-server.sh"
 
 # Both are defaults that somebody will eventually change one of, so it
@@ -126,7 +126,7 @@ spec:
 
   azure:
     subscriptionID: ${subscription}
-    resourceGroup: ${rg}
+    resourceGroup: ${net_rg}
     routeServerName: ${rs}
 EOF
 

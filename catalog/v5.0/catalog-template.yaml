@@ -4,6 +4,9 @@ entries:
   name: bgp-cloud-connector
   schema: olm.package
 - entries:
+  - name: bgp-cloud-connector.v1.0.0
+    replaces: bgp-cloud-connector.v0.1.0
+    skipRange: <1.0.0
   - name: bgp-cloud-connector.v0.1.0
     replaces: bgp-cloud-connector.v0.0.1
     skipRange: <0.1.0
@@ -13,6 +16,9 @@ entries:
   package: bgp-cloud-connector
   schema: olm.channel
 - entries:
+  - name: bgp-cloud-connector.v1.0.0
+    replaces: bgp-cloud-connector.v0.1.0
+    skipRange: <1.0.0
   - name: bgp-cloud-connector.v0.1.0
     replaces: bgp-cloud-connector.v0.0.1
     skipRange: <0.1.0
@@ -21,10 +27,22 @@ entries:
   name: stable
   package: bgp-cloud-connector
   schema: olm.channel
+- image: registry.redhat.io/bgpcc/bgp-cloud-connector-operator-bundle@sha256:875c4548aec9352e19c7d76eae7ad0f1a9b33fc32dd408443fbdd4cdf0a98611
+  name: bgp-cloud-connector.v1.0.0
+  schema: olm.bundle
 - image: registry.redhat.io/bgpcc/bgp-cloud-connector-operator-bundle@sha256:bde280835a23c471b750c43669153ea331d32c568065b22bd170f51678545773
   name: bgp-cloud-connector.v0.1.0
   schema: olm.bundle
 - image: registry.redhat.io/bgpcc/bgp-cloud-connector-operator-bundle@sha256:b2a438ed7fa6ac086d5640bbd8c78e2aaaa6e467db522294368bb05402d83794
   name: bgp-cloud-connector.v0.0.1
   schema: olm.bundle
+- schema: olm.deprecations
+  package: bgp-cloud-connector
+  entries:
+  - reference:
+      schema: olm.channel
+      name: alpha
+    message: |
+      The alpha channel is deprecated. Please switch to the stable channel to
+      continue receiving updates for bgp-cloud-connector.
 schema: olm.template.basic

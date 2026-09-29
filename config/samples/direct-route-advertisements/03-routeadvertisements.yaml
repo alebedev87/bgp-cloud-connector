@@ -3,7 +3,7 @@ kind: RouteAdvertisements
 metadata:
   name: external-bgp-networks
 spec:
-  targetVRF: default
+  # Omit targetVRF to use the default VRF in the operator's base configurations.
   advertisements:
     - PodNetwork
   # PodNetwork advertisements require selection of all nodes.

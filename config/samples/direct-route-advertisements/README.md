@@ -74,12 +74,30 @@ The advertisement selects CUDNs with
 networks to include them in the same policy. Do not put the operator's managed-by
 label on your CUDN or advertisement object.
 
+Leave `spec.targetVRF` unset: the operator's base FRR configurations use the
+default VRF, represented by an empty VRF value. Setting `targetVRF: default`
+explicitly caused a VRF mismatch and advertisement rejection on OpenShift 4.22.14.
+
 The dedicated advertisement name and CUDN label avoid the generated
 `bgp-cc-route-advertisements` object and its `advertise: "true"` selector when
 other networks use `BGPRouting`.
 
 See the [OpenShift RouteAdvertisements documentation](https://docs.redhat.com/en/documentation/openshift_container_platform/4.21/html/advanced_networking/route-advertisements)
 for selector and advertisement behavior.
+
+### Live validation
+
+Validated on OpenShift 4.22.14 with two worker nodes and a temporary in-cluster
+FRR peer. The manual configuration used the peer's pod IP and `ebgpMultiHop: true`.
+Both sessions established and the peer learned `10.100.0.0/16` from both workers,
+without any `BGPRouting` objects. Deleting the advertisement withdrew the prefix
+and removed the OVN-generated FRR configurations while preserving the original
+CUDN, running workload, and base FRR configuration. Reapplying it restored both
+advertised paths.
+
+This validates BGP advertisement and withdrawal, not AWS routing or end-to-end
+workload connectivity. An HTTP probe from the in-cluster peer to the workload
+timed out.
 
 ## Stop advertising while preserving the network
 

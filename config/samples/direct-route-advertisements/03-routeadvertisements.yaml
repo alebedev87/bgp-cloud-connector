@@ -1,0 +1,20 @@
+apiVersion: k8s.ovn.org/v1
+kind: RouteAdvertisements
+metadata:
+  name: external-bgp-networks
+spec:
+  targetVRF: default
+  advertisements:
+    - PodNetwork
+  # PodNetwork advertisements require selection of all nodes.
+  # The selected base FRRConfigurations retain their router-node selectors.
+  nodeSelector: {}
+  frrConfigurationSelector:
+    matchLabels:
+      app.kubernetes.io/managed-by: bgp-cloud-connector
+  networkSelectors:
+    - networkSelectionType: ClusterUserDefinedNetworks
+      clusterUserDefinedNetworkSelector:
+        networkSelector:
+          matchLabels:
+            networking.example.com/export-to: external-bgp

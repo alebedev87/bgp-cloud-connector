@@ -31,6 +31,7 @@ The operator is **cloud platform aware**. When platform configuration is provide
 | [Azure authentication](docs/azure-authentication.md) | Azure credentials — Workload Identity, and the ARO cross-resource-group identity. |
 | [GCP authentication](docs/gcp-authentication.md) | GCP credentials — Workload Identity Federation / Application Default Credentials. |
 | [Manual platform](docs/manual-platform.md) | `platform: Manual` — bring your own BGP router with explicit peer groups, no cloud integration. |
+| [Direct route advertisements](config/samples/direct-route-advertisements/README.md) | Complete example using a user-managed CUDN and `RouteAdvertisements`, without `BGPRouting`. |
 | [Custom resources](docs/custom-resources.md) | `BGPCloudConfiguration` and `BGPRouting` reference, field tables, and operator-generated resources. |
 | [Controller reconciliation](docs/reconciliation.md) | Reconciliation phases, status conditions, watches, and drift recovery. |
 | [Development and deployment](docs/deployment.md) | Build, deploy, and test the operator; OLM bundle install; OLM packaging. |

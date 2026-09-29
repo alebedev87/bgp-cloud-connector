@@ -1,0 +1,18 @@
+apiVersion: networking.openshift.io/v1beta1
+kind: BGPCloudConfiguration
+metadata:
+  name: cluster
+spec:
+  # Manual configures peering without provisioning cloud networking.
+  platform: Manual
+  routerNodeSelector:
+    bgp_router: "true"
+  bgp:
+    localASN: 65001 # Replace with the cluster routers' ASN.
+    livenessDetection: bgp-keepalive
+    peerGroups:
+      - nodeSelector: {}
+        neighbors:
+          - address: 192.0.2.1 # Replace with a reachable, configured BGP peer.
+            remoteASN: 64512
+            # Set ebgpMultiHop: true if the peer is not on the node's link.

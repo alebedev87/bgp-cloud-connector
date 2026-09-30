@@ -153,6 +153,38 @@ aws iam put-role-policy --role-name bgp-cloud-connector \
 
 Complete this **before** creating the `BGPCloudConfiguration` CR with `spec.aws`.
 
+### Provisioning a Route Server for a manual test
+
+The policy above is the policy used by the operator after a Route Server already
+exists. It does not provision the Route Server estate. The provisioning helper
+(`hack/aws/create-route-servers.sh`) also needs the following actions:
+
+```text
+ec2:CreateRouteServer
+ec2:AssociateRouteServer
+ec2:CreateRouteServerEndpoint
+ec2:EnableRouteServerPropagation
+ec2:GetRouteServerAssociations
+ec2:GetRouteServerPropagations
+ec2:GetRouteServerRoutingDatabase
+ec2:DescribeVpcs
+ec2:DescribeRouteTables
+ec2:CreateNetworkInterface
+ec2:CreateNetworkInterfacePermission
+ec2:CreateSecurityGroup
+ec2:DescribeSecurityGroups
+ec2:AuthorizeSecurityGroupIngress
+ec2:CreateTags
+ec2:DeleteTags
+```
+
+For cleanup, add the corresponding `DeleteRouteServer`,
+`DisassociateRouteServer`, `DeleteRouteServerEndpoint`,
+`DisableRouteServerPropagation`, `DeleteNetworkInterface`,
+`DeleteNetworkInterfacePermission`, `DeleteSecurityGroup`, and
+`RevokeSecurityGroupIngress` actions. AWS may also require `sns:CreateTopic` and
+`sns:DeleteTopic` when the Route Server service-linked resources are created.
+
 ---
 
 ## Troubleshooting

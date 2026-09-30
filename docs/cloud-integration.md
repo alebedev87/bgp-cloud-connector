@@ -18,6 +18,19 @@ Kubernetes has out-of-tree cloud controller managers (e.g. [cloud-provider-aws](
 
 When AWS platform integration is configured, the operator performs additional actions during `BGPCloudConfiguration` reconciliation:
 
+The Route Server, its endpoints, VPC association, and route-table propagation
+are infrastructure prerequisites. Provision them with Terraform or
+`hack/aws/create-route-servers.sh`; the operator creates only the per-node
+peers and disables SourceDestCheck. The Route Server's Amazon-side ASN is
+discovered from AWS, so it must not be copied into the cluster's local ASN.
+The local ASN and the remote ASN must be different (for example, `65001` and
+`65000`).
+
+Before testing traffic, allow TCP/179 between the router-node security group
+and the endpoint subnets. Also allow the workload service ports from the VPC
+clients that should reach the advertised CUDN; the operator does not change
+application ingress rules in the node security group.
+
 | Action | AWS API calls | Trigger |
 |:---|:---|:---|
 | Verify credentials | `sts:GetCallerIdentity` | Every reconcile (before any EC2 calls); credentials resolved as described in [AWS authentication](aws-authentication.md) |

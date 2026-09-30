@@ -99,6 +99,21 @@ This validates BGP advertisement and withdrawal, not AWS routing or end-to-end
 workload connectivity. An HTTP probe from the in-cluster peer to the workload
 timed out.
 
+### AWS Route Server validation
+
+The same manifests were validated against an AWS VPC Route Server with
+`platform: Manual`. The test used local ASN `65001` and Route Server ASN
+`65000`; use the ASN configured on your Route Server, rather than assuming
+either value. Three AWS peers reached `BgpStatus: up`, the CUDN prefix appeared
+as an active `Advertisement` in the VPC route tables, and an EC2 client reached
+a workload at `10.100.0.6:8080` with HTTP 200.
+
+The AWS test also required TCP/179 from the Route Server endpoint subnets to the
+router-node security group and TCP/8080 from the client subnet to the workers.
+The latter is workload-specific: allow the service ports your external clients
+need, and remove broad temporary test rules after validation. A BGP session and
+an active route alone do not prove application connectivity.
+
 ## Stop advertising while preserving the network
 
 Delete only the advertisement policy:

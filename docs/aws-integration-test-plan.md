@@ -16,7 +16,7 @@ Automated test plan for the BGP cloud connector's AWS platform integration.
 | Region | us-east-1 |
 | Availability Zones | us-east-1a, us-east-1b, us-east-1c |
 | Local BGP ASN | 65001 |
-| Remote BGP ASN | 64512 (Route Server ASN, auto-discovered) |
+| Remote BGP ASN | Auto-discovered from the Route Server (the provisioning helper defaults to `65000`) |
 | Route Server IDs | 1 (with 2 endpoints per AZ, 6 total, auto-discovered) |
 | Liveness detection | bfd |
 | BGP router nodes | 1 per AZ (3 total), labeled `bgp_router: "true"` |
@@ -87,13 +87,14 @@ Test the AWS platform package in isolation using a mocked EC2 client interface. 
 
 Full end-to-end tests running the operator on a ROSA HCP cluster with VPC Route Server infrastructure. Validates the complete reconciliation loop from CR creation through AWS resource state.
 
-**Prerequisites:** ROSA HCP cluster provisioned by rosa-bgp Terraform, IRSA IAM role configured for the operator's ServiceAccount.
+**Prerequisites:** ROSA HCP cluster provisioned by rosa-bgp Terraform, IRSA IAM role configured for the operator's ServiceAccount, TCP/179 allowed between router nodes and Route Server endpoints, and workload service ports allowed from the external test client subnet.
 
 ### Initial Deployment
 
 | ID | Test Case | Action | Verification |
 |:---|:---|:---|:---|
 | E2E-AWS-01 | Full stack reconcile | Deploy operator, create labeled namespace, apply BGPCloudConfiguration and BGPRouting CRs | Operator Running; config phase=Ready; `status.peerGroups` populated with the discovered plan, one group per AZ; FRRConfigurations created per discovered AZ with discovered neighbor addresses; Route Server peers exist per AZ; SourceDestCheck=false on router nodes; routing phase=Ready with CUDN + RouteAdvertisements; FRR pods show established BGP sessions |
+| E2E-AWS-05 | External workload connectivity | From an EC2 client in a propagated VPC route table, connect to a workload IP from the advertised CUDN | The CUDN prefix is an active `Advertisement` route and the application request succeeds; verify the client subnet and workload port are allowed by security groups |
 
 ### Node Lifecycle
 

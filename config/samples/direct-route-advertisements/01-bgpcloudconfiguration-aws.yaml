@@ -1,0 +1,16 @@
+apiVersion: networking.openshift.io/v1beta1
+kind: BGPCloudConfiguration
+metadata:
+  name: cluster
+spec:
+  # AWS discovers and reconciles Route Server peering and node forwarding.
+  platform: AWS
+  routerNodeSelector:
+    bgp_router: "true"
+  bgp:
+    localASN: 65001 # Replace with the cluster routers' ASN.
+    livenessDetection: bgp-keepalive
+  aws:
+    region: us-east-1 # Replace with the cluster's AWS region.
+    routeServerIDs:
+      - rs-0123456789abcdef0 # Replace with an existing VPC Route Server ID.

@@ -7,40 +7,68 @@ infrastructure and generates the base `FRRConfiguration` objects. OVN-Kubernetes
 uses those configurations and the selected CUDNs to generate the advertisement
 configuration consumed by FRR-K8s.
 
+The direct CUDN advertisement path works with every supported platform
+(`Manual`, `AWS`, `Azure`, and `GCP`). This sample provides ready-to-apply
+infrastructure manifests for `Manual` and `AWS`; Azure and GCP use their usual
+platform-specific `BGPCloudConfiguration` with the same network and
+`RouteAdvertisements` manifests below.
+
 ## Prerequisites
 
 - An OpenShift 4.21+ cluster with OVN-Kubernetes, the required route-advertisement
   feature enabled, and this operator installed; see [deployment](../../../docs/deployment.md).
-- A BGP peer configured to accept sessions from the selected nodes, with matching
-  ASNs and network connectivity. `platform: Manual` does not configure the peer,
-  cloud forwarding settings, or cloud resources.
+- A BGP peer or cloud Route Server configured to accept sessions from the selected
+  nodes, with matching ASNs and network connectivity.
 - An unused namespace name and a CUDN subnet that does not overlap your existing
-  networks. Replace the example peer address, ASNs, and subnet before applying.
+  networks. Replace the example values in the selected infrastructure manifest
+  and the subnet before applying.
 
 The label keys under `networking.example.com` are example user-defined labels.
 They do not require changes to the operator.
 
 ## Apply
 
-Run these commands from the repository root. Label each intended router node:
+Run these commands from the repository root. First choose exactly one
+infrastructure configuration:
+
+- [`01-bgpcloudconfiguration-manual.yaml`](01-bgpcloudconfiguration-manual.yaml)
+  configures explicit BGP neighbors without provisioning cloud networking.
+- [`01-bgpcloudconfiguration-aws.yaml`](01-bgpcloudconfiguration-aws.yaml)
+  discovers and manages AWS VPC Route Server peers. The Route Server must
+  already exist, and AWS credentials/IAM permissions are required.
+
+Do not apply both files; `BGPCloudConfiguration` is a singleton named `cluster`.
+Then label each intended router node:
 
 ```bash
 oc label node <router-node-name> bgp_router=true
 ```
 
-Edit and apply the infrastructure configuration, then wait for reconciliation:
+For Manual:
 
 ```bash
-$EDITOR config/samples/direct-route-advertisements/01-bgpcloudconfiguration.yaml
-oc apply -f config/samples/direct-route-advertisements/01-bgpcloudconfiguration.yaml
+$EDITOR config/samples/direct-route-advertisements/01-bgpcloudconfiguration-manual.yaml
+oc apply -f config/samples/direct-route-advertisements/01-bgpcloudconfiguration-manual.yaml
+```
+
+For AWS:
+
+```bash
+$EDITOR config/samples/direct-route-advertisements/01-bgpcloudconfiguration-aws.yaml
+oc apply -f config/samples/direct-route-advertisements/01-bgpcloudconfiguration-aws.yaml
+```
+
+Then wait for reconciliation:
+
+```bash
 oc wait bgpcloudconfiguration/cluster --for=jsonpath='{.status.phase}'=Ready --timeout=300s
 oc wait crd/routeadvertisements.k8s.ovn.org --for=condition=Established --timeout=300s
 ```
 
-`BGPCloudConfiguration` is a singleton named `cluster`. If you already have one,
-reuse it and skip applying `01-bgpcloudconfiguration.yaml`; this example must not
-overwrite an existing cloud configuration. AWS, Azure, and GCP configurations
-work with the same network and advertisement manifests.
+If you already have a `BGPCloudConfiguration`, reuse it and skip applying either
+infrastructure file; this example must not overwrite an existing cloud
+configuration. The same network and advertisement manifests work with AWS,
+Azure, and GCP configurations.
 
 Create the namespace and network, then the advertisement policy:
 
@@ -101,12 +129,15 @@ timed out.
 
 ### AWS Route Server validation
 
-The same manifests were validated against an AWS VPC Route Server with
-`platform: Manual`. The test used local ASN `65001` and Route Server ASN
-`65000`; use the ASN configured on your Route Server, rather than assuming
-either value. Three AWS peers reached `BgpStatus: up`, the CUDN prefix appeared
-as an active `Advertisement` in the VPC route tables, and an EC2 client reached
-a workload at `10.100.0.6:8080` with HTTP 200.
+The same network and advertisement manifests can be used with an AWS
+`BGPCloudConfiguration` using `platform: AWS`; only the infrastructure
+configuration changes. In that mode the operator discovers the Route Server
+peers and reconciles them for the selected nodes. The test version used local
+ASN `65001` and Route Server ASN `65000`; use the ASN configured on your Route
+Server, rather than assuming either value. Three AWS peers reached
+`BgpStatus: up`, the CUDN prefix appeared as an active `Advertisement` in the
+VPC route tables, and an EC2 client reached a workload at `10.100.0.6:8080`
+with HTTP 200.
 
 The AWS test also required TCP/179 from the Route Server endpoint subnets to the
 router-node security group and TCP/8080 from the client subnet to the workers.

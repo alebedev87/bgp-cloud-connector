@@ -77,7 +77,7 @@ var _ = Describe("Azure E2E", Ordered, func() {
 		By("applying BGPCloudConfiguration CR")
 		configCR = bgpConfig.DeepCopy()
 		configCR.ResourceVersion = ""
-		Expect(k8sClient.Create(ctx, configCR)).To(Succeed())
+		Expect(createOrReuse(ctx, configCR)).To(Succeed())
 
 		By("waiting for config phase=Ready")
 		Eventually(func(g Gomega) {
@@ -96,12 +96,12 @@ var _ = Describe("Azure E2E", Ordered, func() {
 				},
 			},
 		}
-		Expect(k8sClient.Create(ctx, ns)).To(Succeed())
+		Expect(createOrReuse(ctx, ns)).To(Succeed())
 
 		By("applying BGPRouting CR")
 		routingCR = bgpRouting.DeepCopy()
 		routingCR.ResourceVersion = ""
-		Expect(k8sClient.Create(ctx, routingCR)).To(Succeed())
+		Expect(createOrReuse(ctx, routingCR)).To(Succeed())
 
 		By("waiting for routing phase=Ready")
 		Eventually(func(g Gomega) {

@@ -30,25 +30,25 @@ spec:
           bgp_router_subnet: "1"
         neighbors:
           - address: 10.0.1.47       # terraform output vpc1-rs1-subnet1-ep1_ip
-            remoteASN: 64512         # terraform output vpc1-rs1-asn
+            remoteASN: 64512         # example only; use the Route Server ASN from Terraform
           - address: 10.0.1.183      # terraform output vpc1-rs1-subnet1-ep2_ip
-            remoteASN: 64512
+            remoteASN: 64512         # example only; use the Route Server ASN from Terraform
       - nodeSelector:
           topology.kubernetes.io/zone: us-east-1b
           bgp_router_subnet: "2"
         neighbors:
           - address: 10.0.2.91       # terraform output vpc1-rs1-subnet2-ep1_ip
-            remoteASN: 64512
+            remoteASN: 64512         # example only; use the Route Server ASN from Terraform
           - address: 10.0.2.204      # terraform output vpc1-rs1-subnet2-ep2_ip
-            remoteASN: 64512
+            remoteASN: 64512         # example only; use the Route Server ASN from Terraform
       - nodeSelector:
           topology.kubernetes.io/zone: us-east-1c
           bgp_router_subnet: "3"
         neighbors:
           - address: 10.0.3.62       # terraform output vpc1-rs1-subnet3-ep1_ip
-            remoteASN: 64512
+            remoteASN: 64512         # example only; use the Route Server ASN from Terraform
           - address: 10.0.3.178      # terraform output vpc1-rs1-subnet3-ep2_ip
-            remoteASN: 64512
+            remoteASN: 64512         # example only; use the Route Server ASN from Terraform
 ```
 
 ## BGPCloudConfiguration (singleton — with cloud integration)

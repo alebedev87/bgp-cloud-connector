@@ -1,0 +1,27 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: blue-apps
+  labels:
+    # Set this label when creating the namespace, before adding workloads.
+    k8s.ovn.org/primary-user-defined-network: ""
+    networking.example.com/network: blue
+---
+apiVersion: k8s.ovn.org/v1
+kind: ClusterUserDefinedNetwork
+metadata:
+  name: blue
+  labels:
+    networking.example.com/export-to: external-bgp
+spec:
+  namespaceSelector:
+    matchLabels:
+      networking.example.com/network: blue
+  network:
+    topology: Layer2
+    layer2:
+      role: Primary
+      ipam:
+        lifecycle: Persistent
+      subnets:
+        - 10.100.0.0/16 # Replace if this overlaps an existing network.

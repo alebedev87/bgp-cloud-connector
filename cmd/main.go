@@ -99,13 +99,14 @@ func main() {
 	ctrl.SetLogger(zap.New(zap.UseFlagOptions(&opts)))
 
 	// A cancellable context so the trusted CA watcher can stop the manager and
-	// let the Deployment restart the pod when the proxy CA bundle rotates.
+	// let the kubelet restart the container when the proxy CA bundle rotates, so
+	// the new process rebuilds its certificate pool from the refreshed mount.
 	ctx, cancel := context.WithCancel(ctrl.SetupSignalHandler())
 	defer cancel()
 
 	cfg := ctrl.GetConfigOrDie()
 
-	apiClient, err := client.New(cfg, client.Options{Scheme: scheme})
+	tlsProfileClient, err := client.New(cfg, client.Options{Scheme: scheme})
 	if err != nil {
 		setupLog.Error(err, "unable to create client")
 		os.Exit(1)
@@ -117,15 +118,9 @@ func main() {
 		os.Exit(1)
 	}
 
-	tlsProfile, err := bgptls.GetProfileInfo(logr.NewContext(ctx, setupLog), apiClient, discoveryClient)
+	tlsProfile, err := bgptls.GetProfileInfo(logr.NewContext(ctx, setupLog), tlsProfileClient, discoveryClient)
 	if err != nil {
 		setupLog.Error(err, "unable to get TLS profile options")
-		os.Exit(1)
-	}
-
-	trustedCAWatcher, err := trustedca.New(logr.NewContext(ctx, setupLog), apiClient, cancel)
-	if err != nil {
-		setupLog.Error(err, "unable to set up trusted CA configmap watcher")
 		os.Exit(1)
 	}
 
@@ -294,8 +289,9 @@ func main() {
 		os.Exit(1)
 	}
 
+	trustedCAWatcher := trustedca.New(logr.NewContext(ctx, setupLog), cancel)
 	if err := trustedCAWatcher.SetupWithManager(mgr); err != nil {
-		setupLog.Error(err, "unable to set up trusted CA configmap watcher")
+		setupLog.Error(err, "unable to set up trusted CA watcher")
 		os.Exit(1)
 	}
 

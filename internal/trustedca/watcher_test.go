@@ -25,133 +25,77 @@ import (
 	"time"
 
 	"github.com/go-logr/logr"
-	corev1 "k8s.io/api/core/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/runtime"
-	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
-	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 )
 
-const (
-	testNamespace = "openshift-bgp-cloud-connector"
-	testName      = "openshift-bgp-cloud-connector-trusted-ca"
-)
-
-func TestCurrentHash_MissingConfigMapIsEmpty(t *testing.T) {
-	w := &Watcher{
-		client: fake.NewClientBuilder().WithScheme(testScheme(t)).Build(),
+// publishData simulates the kubelet publishing a new projected-volume version:
+// it writes a fresh timestamped data directory and atomically swaps the "..data"
+// symlink to point at it.
+func publishData(t *testing.T, dir, version string) {
+	t.Helper()
+	dataDir := filepath.Join(dir, version)
+	if err := os.Mkdir(dataDir, 0o700); err != nil {
+		t.Fatalf("mkdir data version: %v", err)
 	}
-
-	hash, err := w.currentHash(context.Background())
-	if err != nil {
-		t.Fatalf("currentHash returned error for missing configmap: %v", err)
+	if err := os.WriteFile(filepath.Join(dataDir, "ca-bundle.crt"), []byte("bundle"), 0o600); err != nil {
+		t.Fatalf("write bundle: %v", err)
 	}
-	if hash != "" {
-		t.Errorf("expected empty baseline for missing configmap, got %q", hash)
+	// Atomic swap: create the link under a temp name, then rename it onto "..data".
+	tmpLink := filepath.Join(dir, "..data_tmp")
+	if err := os.Symlink(version, tmpLink); err != nil {
+		t.Fatalf("symlink tmp: %v", err)
+	}
+	if err := os.Rename(tmpLink, filepath.Join(dir, dataLink)); err != nil {
+		t.Fatalf("rename onto ..data: %v", err)
 	}
 }
 
-func TestCurrentHash_PresentMatchesBundle(t *testing.T) {
-	cm := caConfigMap("original-bundle")
-	w := &Watcher{
-		client: fake.NewClientBuilder().WithScheme(testScheme(t)).WithObjects(cm).Build(),
-	}
-
-	hash, err := w.currentHash(context.Background())
-	if err != nil {
-		t.Fatalf("currentHash: %v", err)
-	}
-	if want := hashBundle(cm); hash != want {
-		t.Errorf("hash = %q, want %q", hash, want)
+func testWatcher(dir string, onChange func()) *Watcher {
+	return &Watcher{
+		dir:      dir,
+		onChange: onChange,
+		log:      logr.Discard(),
 	}
 }
 
-func TestStart_TriggersWhenBundleChanges(t *testing.T) {
-	cm := caConfigMap("rotated-bundle") // client already holds the rotated bundle
-	c := fake.NewClientBuilder().WithScheme(testScheme(t)).WithObjects(cm)
+func TestStart_TriggersWhenBundleIsPublished(t *testing.T) {
+	dir := t.TempDir()
 
 	triggered := make(chan struct{})
-	w := testWatcher(c, "original-bundle", func() { close(triggered) })
+	w := testWatcher(dir, func() { close(triggered) })
 
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
 	go func() { _ = w.Start(ctx) }()
+
+	// Give the watcher a moment to register before publishing.
+	time.Sleep(50 * time.Millisecond)
+	publishData(t, dir, "..2026_01_01")
 
 	select {
 	case <-triggered:
 	case <-ctx.Done():
-		t.Fatal("onChange did not fire although the bundle rotated")
+		t.Fatal("onChange did not fire although the bundle was published")
 	}
 }
 
-func TestStart_DoesNotTriggerWhenUnchanged(t *testing.T) {
-	cm := caConfigMap("original-bundle")
-	c := fake.NewClientBuilder().WithScheme(testScheme(t)).WithObjects(cm)
+func TestStart_DoesNotTriggerOnUnrelatedFile(t *testing.T) {
+	dir := t.TempDir()
 
 	var called atomic.Bool
-	w := testWatcher(c, "original-bundle", func() { called.Store(true) })
+	w := testWatcher(dir, func() { called.Store(true) })
 
-	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
+	ctx, cancel := context.WithTimeout(context.Background(), 300*time.Millisecond)
 	defer cancel()
-	if err := w.Start(ctx); err != nil {
-		t.Fatalf("Start: %v", err)
+	done := make(chan struct{})
+	go func() { _ = w.Start(ctx); close(done) }()
+
+	time.Sleep(50 * time.Millisecond)
+	if err := os.WriteFile(filepath.Join(dir, "unrelated.txt"), []byte("x"), 0o600); err != nil {
+		t.Fatalf("write unrelated file: %v", err)
 	}
 
+	<-done
 	if called.Load() {
-		t.Error("onChange fired although the bundle was unchanged")
-	}
-}
-
-func TestHashMountedBundle_MissingFileIsEmpty(t *testing.T) {
-	hash, err := hashMountedBundle(filepath.Join(t.TempDir(), "absent.crt"))
-	if err != nil {
-		t.Fatalf("hashMountedBundle returned error for missing file: %v", err)
-	}
-	if hash != "" {
-		t.Errorf("expected empty baseline for missing file, got %q", hash)
-	}
-}
-
-func TestHashMountedBundle_MatchesConfigMapBundle(t *testing.T) {
-	const bundle = "original-bundle"
-	path := filepath.Join(t.TempDir(), "ca-bundle.crt")
-	if err := os.WriteFile(path, []byte(bundle), 0o600); err != nil {
-		t.Fatalf("write bundle: %v", err)
-	}
-
-	hash, err := hashMountedBundle(path)
-	if err != nil {
-		t.Fatalf("mountedHash: %v", err)
-	}
-	// The subPath mount holds the exact ca-bundle.crt value, so the mounted-file
-	// hash must match the ConfigMap hash the polling loop computes.
-	if want := hashBundle(caConfigMap(bundle)); hash != want {
-		t.Errorf("hash = %q, want %q", hash, want)
-	}
-}
-
-func testScheme(t *testing.T) *runtime.Scheme {
-	t.Helper()
-	scheme := runtime.NewScheme()
-	if err := clientgoscheme.AddToScheme(scheme); err != nil {
-		t.Fatalf("failed to build scheme: %v", err)
-	}
-	return scheme
-}
-
-func caConfigMap(bundle string) *corev1.ConfigMap {
-	return &corev1.ConfigMap{
-		ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName},
-		Data:       map[string]string{caBundleKey: bundle},
-	}
-}
-
-func testWatcher(c *fake.ClientBuilder, baseline string, onChange func()) *Watcher {
-	return &Watcher{
-		client:      c.Build(),
-		initialHash: hashBundle(caConfigMap(baseline)),
-		interval:    time.Millisecond,
-		onChange:    onChange,
-		log:         logr.Discard(),
+		t.Error("onChange fired for an unrelated file event")
 	}
 }

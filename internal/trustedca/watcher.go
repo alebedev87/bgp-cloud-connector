@@ -18,66 +18,43 @@ package trustedca
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"fmt"
-	"os"
-	"time"
+	"path/filepath"
 
+	"github.com/fsnotify/fsnotify"
 	"github.com/go-logr/logr"
-	corev1 "k8s.io/api/core/v1"
-	apierrors "k8s.io/apimachinery/pkg/api/errors"
-	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
-	ctrlclient "sigs.k8s.io/controller-runtime/pkg/client"
-
-	"github.com/openshift/bgp-cloud-connector/internal/controller"
 )
 
 const (
-	// caBundleKey is the ConfigMap key the Cluster Network Operator populates
-	// with the trusted CA bundle.
-	caBundleKey = "ca-bundle.crt"
-	// configMapName is the trusted CA ConfigMap shipped in the bundle.
-	configMapName = "openshift-bgp-cloud-connector-trusted-ca"
-	// mountedBundlePath is where the trusted CA ConfigMap is mounted into the manager.
-	mountedBundlePath = "/etc/pki/tls/certs/proxy-ca-bundle.crt"
-	// defaultPollInterval is how often the trusted CA bundle is re-read.
-	defaultPollInterval = 2 * time.Minute
-	// getTimeout bounds a single trusted CA ConfigMap API read so a stalled API
-	// server cannot block a polling iteration indefinitely.
-	getTimeout = 10 * time.Second
+	// bundleDir is where the trusted CA ConfigMap is mounted into the manager,
+	// replacing the image's trust store. The mount is a directory (not a
+	// subPath), so the kubelet refreshes it in place when the bundle rotates.
+	bundleDir = "/etc/pki/tls/certs"
+
+	// dataLink is the symlink the kubelet atomically swaps to publish a new
+	// version of a projected volume. Its appearance is the single reliable
+	// signal that the mounted bundle content changed.
+	dataLink = "..data"
 )
 
-// +kubebuilder:rbac:groups="",resources=configmaps,resourceNames=openshift-bgp-cloud-connector-trusted-ca,verbs=get,namespace=openshift-bgp-cloud-connector
-
-// Watcher polls the trusted CA ConfigMap and calls onChange when its bundle
-// changes from the content observed at startup. It is a manager Runnable.
+// Watcher watches the mounted trusted CA bundle directory and calls onChange
+// when the kubelet publishes a new bundle, so the manager can restart and
+// rebuild its certificate pool from the rotated bundle. It is a manager
+// Runnable.
 type Watcher struct {
-	client      ctrlclient.Client
-	initialHash string
-	interval    time.Duration
-	onChange    func()
-	log         logr.Logger
+	dir      string
+	onChange func()
+	log      logr.Logger
 }
 
-// New records the mounted trusted CA bundle as the startup baseline, and returns a Watcher.
-func New(ctx context.Context, c ctrlclient.Client, onChange func()) (*Watcher, error) {
-	w := &Watcher{
-		client:   c,
-		interval: defaultPollInterval,
+// New returns a Watcher for the mounted trusted CA bundle directory.
+func New(ctx context.Context, onChange func()) *Watcher {
+	return &Watcher{
+		dir:      bundleDir,
 		onChange: onChange,
 		log:      logr.FromContextOrDiscard(ctx),
 	}
-
-	w.log.Info("Initializing trusted CA configmap watcher")
-
-	var err error
-	if w.initialHash, err = hashMountedBundle(mountedBundlePath); err != nil {
-		return nil, err
-	}
-
-	return w, nil
 }
 
 // SetupWithManager registers the Watcher so the manager runs and stops it.
@@ -85,69 +62,41 @@ func (w *Watcher) SetupWithManager(mgr ctrl.Manager) error {
 	return mgr.Add(w)
 }
 
-// Start polls the trusted CA ConfigMap until its bundle changes or ctx is
-// cancelled. It satisfies manager.Runnable.
+// Start watches the trusted CA bundle directory until the bundle rotates or ctx
+// is cancelled. It satisfies manager.Runnable.
 func (w *Watcher) Start(ctx context.Context) error {
-	ticker := time.NewTicker(w.interval)
-	defer ticker.Stop()
+	watcher, err := fsnotify.NewWatcher()
+	if err != nil {
+		return fmt.Errorf("failed to create fsnotify watcher: %w", err)
+	}
+	defer func() { _ = watcher.Close() }()
 
-	w.log.Info("Starting to watch trusted CA configmap")
+	if err := watcher.Add(w.dir); err != nil {
+		return fmt.Errorf("failed to watch trusted CA bundle directory %s: %w", w.dir, err)
+	}
+
+	w.log.Info("Starting to watch trusted CA bundle directory", "dir", w.dir)
 
 	for {
 		select {
 		case <-ctx.Done():
 			return nil
-		case <-ticker.C:
-			hash, err := w.currentHash(ctx)
-			if err != nil {
-				w.log.Error(err, "failed to read trusted CA configmap, will retry")
-				continue
+		case event, ok := <-watcher.Events:
+			if !ok {
+				return nil
 			}
-			if hash != w.initialHash {
+			// The kubelet swaps the "..data" symlink (an atomic rename into the
+			// directory, reported as Create) to publish a new bundle version.
+			if filepath.Base(event.Name) == dataLink && event.Op&(fsnotify.Create|fsnotify.Rename) != 0 {
 				w.log.Info("trusted CA bundle changed, initiating shutdown to reload it")
 				w.onChange()
 				return nil
 			}
+		case err, ok := <-watcher.Errors:
+			if !ok {
+				return nil
+			}
+			w.log.Error(err, "error watching trusted CA bundle directory")
 		}
 	}
-}
-
-// currentHash returns a hash of the trusted CA ConfigMap's bundle, or the empty
-// string when the ConfigMap does not exist yet.
-func (w *Watcher) currentHash(ctx context.Context) (string, error) {
-	getCtx, cancel := context.WithTimeoutCause(ctx, getTimeout, fmt.Errorf("Get did not complete within %s", getTimeout))
-	defer cancel()
-
-	cm := &corev1.ConfigMap{}
-	if err := w.client.Get(getCtx, types.NamespacedName{Namespace: controller.DefaultOperatorNamespace, Name: configMapName}, cm); err != nil {
-		if apierrors.IsNotFound(err) {
-			return "", nil
-		}
-		return "", fmt.Errorf("failed to read trusted CA configmap %s/%s: %w", controller.DefaultOperatorNamespace, configMapName, err)
-	}
-	return hashBundle(cm), nil
-}
-
-// hashMountedBundle returns a hash of the trusted CA bundle at path, or the empty
-// string when the file does not exist yet.
-func hashMountedBundle(path string) (string, error) {
-	data, err := os.ReadFile(path)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return "", nil
-		}
-		return "", fmt.Errorf("failed to read mounted trusted CA bundle %s: %w", path, err)
-	}
-	return hashBytes(data), nil
-}
-
-// hashBundle returns a hash of the ConfigMap's ca-bundle.crt so a change to the
-// trusted CA content can be detected. Only that key matters for trust.
-func hashBundle(cm *corev1.ConfigMap) string {
-	return hashBytes([]byte(cm.Data[caBundleKey]))
-}
-
-func hashBytes(b []byte) string {
-	sum := sha256.Sum256(b)
-	return hex.EncodeToString(sum[:])
 }

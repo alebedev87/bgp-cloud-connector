@@ -1,6 +1,6 @@
 # KubeVirt VM Testing
 
-KubeVirt VMIs in UDN-enabled namespaces **must** use `bridge` binding, not `masquerade`.
+KubeVirt VMIs in UDN-enabled namespaces **must** use `l2bridge` binding, not `masquerade`.
 
 The `masquerade` binding installs nftables rules in the virt-launcher pod that drop inbound traffic on UDN interfaces (`ovn-udn1`). This blocks both IPv4 and IPv6 connectivity to the VM from other pods and external hosts.
 
@@ -12,7 +12,8 @@ spec:
     devices:
       interfaces:
         - name: default
-          bridge: {}
+          binding:
+            name: l2bridge
   networks:
     - name: default
       pod: {}

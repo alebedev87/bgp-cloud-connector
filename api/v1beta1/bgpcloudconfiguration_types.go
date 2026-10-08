@@ -97,16 +97,16 @@ const (
 
 // BGPNeighbor identifies a single BGP peer by its IP address and AS number.
 type BGPNeighbor struct {
-	// Address is the IP address of the BGP neighbor.
+	// address is the IP address of the BGP neighbor.
 	// +kubebuilder:validation:MinLength=2
 	// +kubebuilder:validation:MaxLength=45
 	// +kubebuilder:validation:XValidation:rule="isIP(self)",message="must be a valid IP address"
 	Address string `json:"address"`
-	// RemoteASN is the autonomous system number of the BGP neighbor.
+	// remoteASN is the autonomous system number of the BGP neighbor.
 	// +kubebuilder:validation:Minimum=0
 	// +kubebuilder:validation:Maximum=4294967295
 	RemoteASN int64 `json:"remoteASN"`
-	// EBGPMultiHop allows the session to be established with a peer that is
+	// ebgpMultiHop allows the session to be established with a peer that is
 	// not on this node's link.
 	//
 	// An Azure Route Server needs it, because it sits in its own subnet rather
@@ -126,10 +126,10 @@ type BGPNeighbor struct {
 // the ones in its own; endpoints presented once for a region give a single
 // group covering every router node.
 type PeerGroup struct {
-	// NodeSelector is a set of labels used to select the router nodes
+	// nodeSelector is a set of labels used to select the router nodes
 	// that belong to this peer group.
 	NodeSelector map[string]string `json:"nodeSelector"`
-	// Neighbors is the list of BGP peers that nodes in this group establish sessions with.
+	// neighbors is the list of BGP peers that nodes in this group establish sessions with.
 	// +kubebuilder:validation:MinItems=1
 	// +kubebuilder:validation:MaxItems=8
 	// +listType=atomic
@@ -140,10 +140,10 @@ type PeerGroup struct {
 // and their endpoints are per subnet, which is why AWS is the cloud that
 // produces more than one peer group.
 type AWSConfig struct {
-	// Region is the AWS region where the ROSA cluster and Route Servers are deployed.
+	// region is the AWS region where the ROSA cluster and Route Servers are deployed.
 	// +kubebuilder:validation:MinLength=1
 	Region string `json:"region"`
-	// RouteServerIDs is the list of VPC Route Server IDs used for auto-discovery
+	// routeServerIDs is the list of VPC Route Server IDs used for auto-discovery
 	// of BGP endpoints, neighbor IPs, availability zones, and remote ASN.
 	// +kubebuilder:validation:MinItems=1
 	// +listType=atomic
@@ -159,12 +159,12 @@ type AzureConfig struct {
 	SubscriptionID string `json:"subscriptionID"`
 	// +kubebuilder:validation:MinLength=1
 	ResourceGroup string `json:"resourceGroup"`
-	// RouteServerName is the Azure Route Server whose BGP connections this
+	// routeServerName is the Azure Route Server whose BGP connections this
 	// operator manages. Azure models it as a Virtual Hub, and its
 	// virtualRouterIps become the BGP neighbours.
 	// +kubebuilder:validation:MinLength=1
 	RouteServerName string `json:"routeServerName"`
-	// NetworkInterfaceClientID is the managed identity to use for network
+	// networkInterfaceClientID is the managed identity to use for network
 	// interface calls, where that differs from the identity the operator
 	// otherwise runs as.
 	//
@@ -192,11 +192,11 @@ type AzureConfig struct {
 type NCCConfig struct {
 	// +kubebuilder:validation:MinLength=1
 	HubName string `json:"hubName"`
-	// SpokePrefix names the spokes this operator manages. Spokes are numbered
+	// spokePrefix names the spokes this operator manages. Spokes are numbered
 	// from it, because a spoke holds a limited number of instances.
 	// +kubebuilder:validation:MinLength=1
 	SpokePrefix string `json:"spokePrefix"`
-	// SiteToSiteDataTransfer enables NCC site-to-site data transfer on the
+	// siteToSiteDataTransfer enables NCC site-to-site data transfer on the
 	// managed spokes.
 	// +optional
 	SiteToSiteDataTransfer bool `json:"siteToSiteDataTransfer,omitempty"`
@@ -209,14 +209,14 @@ type GCPConfig struct {
 	Project string `json:"project"`
 	// +kubebuilder:validation:MinLength=1
 	Region string `json:"region"`
-	// CloudRouterName is the Cloud Router the router nodes peer with; its
+	// cloudRouterName is the Cloud Router the router nodes peer with; its
 	// interface addresses become the BGP neighbors. It must not be the
 	// installer's Cloud NAT router, which has no interfaces and carries the
 	// cluster's egress.
 	// +kubebuilder:validation:MinLength=1
 	CloudRouterName string    `json:"cloudRouterName"`
 	NCC             NCCConfig `json:"ncc"`
-	// EnableNestedVirtualization turns on nested virtualization on the router
+	// enableNestedVirtualization turns on nested virtualization on the router
 	// instances, which KubeVirt needs. Enabling it restarts the instance.
 	// +optional
 	// +kubebuilder:default=true
@@ -231,14 +231,14 @@ type GCPConfig struct {
 // cloud reconciling peerings and reporting nothing about them, and a sibling
 // block per cloud is worse.
 type PeerGroupStatus struct {
-	// Key names the group in cloud-meaningful terms: an availability zone on
+	// key names the group in cloud-meaningful terms: an availability zone on
 	// AWS, and whatever names the single regional endpoint elsewhere.
 	Key string `json:"key"`
-	// NodeSelector narrows spec.routerNodeSelector to this group. Empty means
+	// nodeSelector narrows spec.routerNodeSelector to this group. Empty means
 	// every router node.
 	// +optional
 	NodeSelector map[string]string `json:"nodeSelector,omitempty"`
-	// Neighbors are the addresses the router nodes in this group peer with.
+	// neighbors are the addresses the router nodes in this group peer with.
 	// +optional
 	// +kubebuilder:validation:MaxItems=8
 	// +listType=atomic
@@ -248,16 +248,16 @@ type PeerGroupStatus struct {
 
 // BGPConfig holds the BGP speaker configuration and optional peer groups.
 type BGPConfig struct {
-	// LocalASN is the autonomous system number for the cluster's FRR routers.
+	// localASN is the autonomous system number for the cluster's FRR routers.
 	// +kubebuilder:validation:Minimum=0
 	// +kubebuilder:validation:Maximum=4294967295
 	LocalASN int64 `json:"localASN"`
-	// LivenessDetection selects the mechanism used to detect BGP peer failure.
+	// livenessDetection selects the mechanism used to detect BGP peer failure.
 	// BFD detects failure in ~1s; bgp-keepalive relies on the BGP hold timer (~90s).
 	// +optional
 	// +kubebuilder:default="bgp-keepalive"
 	LivenessDetection LivenessDetectionType `json:"livenessDetection,omitempty"`
-	// PeerGroups defines explicit BGP peer groups with neighbor addresses.
+	// peerGroups defines explicit BGP peer groups with neighbor addresses.
 	// Required when platform is Manual; must not be set on other platforms
 	// where peer groups are auto-discovered.
 	// +optional
@@ -277,17 +277,17 @@ type BGPConfig struct {
 // +kubebuilder:validation:XValidation:rule="self.platform != 'Manual' || (has(self.bgp.peerGroups) && size(self.bgp.peerGroups) > 0)",message="spec.bgp.peerGroups is required when spec.platform is Manual"
 // +kubebuilder:validation:XValidation:rule="self.platform == 'Manual' || !has(self.bgp.peerGroups) || size(self.bgp.peerGroups) == 0",message="spec.bgp.peerGroups may only be set when spec.platform is Manual"
 type BGPCloudConfigurationSpec struct {
-	// Platform selects the cloud provider integration mode.
+	// platform selects the cloud provider integration mode.
 	// AWS auto-discovers BGP endpoints from VPC Route Servers.
 	// Manual requires explicit peer groups in spec.bgp.peerGroups.
 	Platform PlatformType `json:"platform"`
-	// BGP holds the BGP speaker configuration, including local ASN,
+	// bgp holds the BGP speaker configuration, including local ASN,
 	// liveness detection, and (under Manual platform) peer groups.
 	BGP BGPConfig `json:"bgp"`
-	// RouterNodeSelector is a set of labels that identify which cluster nodes
+	// routerNodeSelector is a set of labels that identify which cluster nodes
 	// act as BGP routers. Must match labels applied to BGP router machine pools.
 	RouterNodeSelector map[string]string `json:"routerNodeSelector"`
-	// AWS holds the AWS-specific configuration for auto-discovery of BGP
+	// aws holds the AWS-specific configuration for auto-discovery of BGP
 	// infrastructure. Required when platform is AWS; must not be set otherwise.
 	// +optional
 	AWS *AWSConfig `json:"aws,omitempty"`
@@ -298,18 +298,18 @@ type BGPCloudConfigurationSpec struct {
 
 // BGPCloudConfigurationStatus defines the observed state of BGPCloudConfiguration.
 type BGPCloudConfigurationStatus struct {
-	// Phase is the current lifecycle phase of the BGP configuration.
+	// phase is the current lifecycle phase of the BGP configuration.
 	// +optional
 	Phase PhaseType `json:"phase,omitempty"`
-	// Conditions represent the latest available observations of the resource's state.
+	// conditions represent the latest available observations of the resource's state.
 	// +optional
 	// +listType=map
 	// +listMapKey=type
 	Conditions []metav1.Condition `json:"conditions,omitempty" patchStrategy:"merge" patchMergeKey:"type"`
-	// ObservedGeneration is the most recent generation observed by the controller.
+	// observedGeneration is the most recent generation observed by the controller.
 	// +optional
 	ObservedGeneration int64 `json:"observedGeneration,omitempty"`
-	// PeerGroups is the discovered peering plan: what the operator found in
+	// peerGroups is the discovered peering plan: what the operator found in
 	// the cloud and rendered into FRRConfigurations. Empty under
 	// platform: Manual, where the plan is declared in spec.bgp.peerGroups
 	// rather than discovered.
@@ -318,14 +318,14 @@ type BGPCloudConfigurationStatus struct {
 	// +listType=atomic
 	// +kubebuilder:validation:MaxItems=16
 	PeerGroups []PeerGroupStatus `json:"peerGroups,omitempty"`
-	// FRRProviderOwnership records whether this controller may revert the FRR
+	// frrProviderOwnership records whether this controller may revert the FRR
 	// provider patch on Network/cluster additionalRoutingCapabilities.providers.
 	// Empty until the first Phase 1 reconcile completes.
 	// Owned: this controller enabled FRR and may revert it on BGPCloudConfiguration deletion.
 	// External: FRR was already enabled before the first Phase 1 reconcile.
 	// +optional
 	FRRProviderOwnership NetworkPatchOwnership `json:"frrProviderOwnership,omitempty"`
-	// RouteAdvertisementsOwnership records whether this controller may revert the
+	// routeAdvertisementsOwnership records whether this controller may revert the
 	// routeAdvertisements patch on Network/cluster defaultNetwork.ovnKubernetesConfig.
 	// This documents the Network/cluster routeAdvertisements toggle, not the
 	// RouteAdvertisements CR.

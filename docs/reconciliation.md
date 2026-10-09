@@ -55,7 +55,9 @@ Phase 5: Reconcile AWS Resources (if spec.aws configured)
   │   private IP from status.addresses, instance ID from spec.providerID
   ├── Route Server peers: for each AZ, ensure peers exist on the
   │   discovered endpoint IDs for the local BGP-enabled worker nodes only
-  ├── Source/dest check: disable on the primary ENI of each node
+  ├── Forwarding: speakers, plus nodes matching spec.forwardingNodeSelector.
+  │   Unset or a selector that matches nobody updates speakers only.
+  │   The extra nodes are not peered.
   └── Condition: CloudResourcesReconciled
           │
           ▼

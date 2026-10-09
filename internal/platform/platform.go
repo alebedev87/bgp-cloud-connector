@@ -80,5 +80,12 @@ func (e *CredentialError) Error() string {
 type CloudPlatform interface {
 	DiscoverEndpoints(ctx context.Context) (*DiscoveryResult, error)
 	ReconcileNodes(ctx context.Context, nodes []RouterNode) error
+	// EnsureForwarding lets the given nodes pass packets that are not
+	// addressed to them. Speakers already receive this from ReconcileNodes;
+	// this is how other nodes get it without becoming peers. An empty list
+	// does nothing, so an unset selector and a selector that matches nobody
+	// are the same call. It must not create peers, join NCC spokes, or
+	// restart instances.
+	EnsureForwarding(ctx context.Context, nodes []RouterNode) error
 	Cleanup(ctx context.Context) error
 }

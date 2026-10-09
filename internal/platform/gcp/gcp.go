@@ -168,6 +168,32 @@ func (p *Platform) ReconcileNodes(ctx context.Context, nodes []platform.RouterNo
 	return nil
 }
 
+// EnsureForwarding sets canIpForward on nodes that are not BGP speakers.
+// ReconcileNodes already does this for speakers, and also peers them, joins
+// them to NCC spokes, and may restart them to enable nested virtualization.
+// None of that belongs on a node that only needs to pass CUDN addresses.
+func (p *Platform) EnsureForwarding(ctx context.Context, nodes []platform.RouterNode) error {
+	if len(nodes) == 0 {
+		return nil
+	}
+	logger := log.FromContext(ctx)
+	routerNodes, err := toRouterNodes(nodes)
+	if err != nil {
+		return err
+	}
+	for _, node := range routerNodes {
+		changed, err := p.compute.EnsureCanIPForward(ctx, node)
+		if err != nil {
+			platform.RecordCloudAPIError(platform.PlatformGCP, platform.OpNodeForwarding)
+			return fmt.Errorf("enabling IP forwarding on %q: %w", node.Name, err)
+		}
+		if changed {
+			logger.Info("enabled canIpForward", "instance", node.Name)
+		}
+	}
+	return nil
+}
+
 // Cleanup releases the Cloud Router peers and NCC spokes this platform made.
 func (p *Platform) Cleanup(ctx context.Context) error {
 	if _, err := p.compute.ClearPeers(ctx, p.cfg.CloudRouterName, p.cfg.ClusterID); err != nil {

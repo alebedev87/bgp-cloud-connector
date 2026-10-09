@@ -146,6 +146,19 @@ func (p *Platform) ReconcileNodes(ctx context.Context, nodes []platform.RouterNo
 	return nil
 }
 
+// EnsureForwarding enables IP forwarding on nodes that are not BGP speakers.
+// ReconcileNodes already does this for speakers, and also peers them.
+func (p *Platform) EnsureForwarding(ctx context.Context, nodes []platform.RouterNode) error {
+	if len(nodes) == 0 {
+		return nil
+	}
+	vms, err := toVirtualMachines(nodes)
+	if err != nil {
+		return err
+	}
+	return p.ensureNodesCanForward(ctx, vms)
+}
+
 // reconcileOurPeerings writes this cluster's peerings without disturbing any
 // others.
 //

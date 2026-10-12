@@ -131,9 +131,13 @@ fmt: ## Run go fmt against code.
 vet: ## Run go vet against code.
 	go vet ./...
 
+# Unit-test packages: everything except the e2e suites, which need a live
+# cluster. Derived from go list so new packages are covered automatically.
+UNIT_TEST_PKGS ?= $(shell go list ./... | grep -v '/test/e2e')
+
 .PHONY: test
 test: manifests generate fmt vet ## Run platform-independent unit tests.
-	KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) --bin-dir $(LOCALBIN) -p path)" go test ./internal/controller/... ./internal/tls/... ./api/... ./cmd/... -coverprofile cover.out
+	KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) --bin-dir $(LOCALBIN) -p path)" go test $(UNIT_TEST_PKGS) -coverprofile cover.out
 	$(MAKE) test-scripts
 
 .PHONY: test-scripts

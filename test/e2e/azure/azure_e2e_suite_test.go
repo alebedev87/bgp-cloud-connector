@@ -19,6 +19,7 @@ package azure_e2e
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -249,12 +250,7 @@ func interfaceCredential(ctx context.Context) azcore.TokenCredential {
 		"there is no kube-system/azure-credentials, so this cluster federates, and the profile must name "+
 			"spec.azure.networkInterfaceClientID: the identity the operator writes interfaces as")
 
-	// Every cluster that federates has this, and it holds only the tenant.
-	ccoSecret, err := clientset.CoreV1().Secrets("openshift-cloud-credential-operator").
-		Get(ctx, "azure-credentials", metav1.GetOptions{})
-	Expect(err).NotTo(HaveOccurred(), "reading the tenant from openshift-cloud-credential-operator/azure-credentials")
-	tenantID := string(ccoSecret.Data["azure_tenant_id"])
-	Expect(tenantID).NotTo(BeEmpty())
+	tenantID := clusterTenant(ctx)
 
 	expiry := int64(600)
 	cred, err := azidentity.NewClientAssertionCredential(tenantID, clientID, func(ctx context.Context) (string, error) {
@@ -272,6 +268,46 @@ func interfaceCredential(ctx context.Context) azcore.TokenCredential {
 	}, nil)
 	Expect(err).NotTo(HaveOccurred())
 	return cred
+}
+
+// clusterTenant is the Azure tenant of a cluster whose operators
+// federate. A self-managed install and ARO classic keep it in the cloud
+// credential operator's secret. ARO HCP has no such secret, but every
+// Azure cluster carries the cloud provider's configuration, which names
+// it.
+func clusterTenant(ctx context.Context) string {
+	secret, err := clientset.CoreV1().Secrets("openshift-cloud-credential-operator").
+		Get(ctx, "azure-credentials", metav1.GetOptions{})
+	if err == nil {
+		tenantID := string(secret.Data["azure_tenant_id"])
+		Expect(tenantID).NotTo(BeEmpty(), "openshift-cloud-credential-operator/azure-credentials has no azure_tenant_id")
+		return tenantID
+	}
+	Expect(apierrors.IsNotFound(err)).To(BeTrue(),
+		"reading openshift-cloud-credential-operator/azure-credentials: %v", err)
+
+	cm, err := clientset.CoreV1().ConfigMaps("openshift-config").
+		Get(ctx, "cloud-provider-config", metav1.GetOptions{})
+	Expect(err).NotTo(HaveOccurred(), "no openshift-cloud-credential-operator/azure-credentials, "+
+		"so reading the tenant from openshift-config/cloud-provider-config")
+	tenantID, err := tenantFromCloudConfig(cm.Data["config"])
+	Expect(err).NotTo(HaveOccurred(), "openshift-config/cloud-provider-config")
+	return tenantID
+}
+
+// tenantFromCloudConfig reads tenantId from the Azure cloud provider's
+// JSON configuration.
+func tenantFromCloudConfig(config string) (string, error) {
+	var parsed struct {
+		TenantID string `json:"tenantId"`
+	}
+	if err := json.Unmarshal([]byte(config), &parsed); err != nil {
+		return "", fmt.Errorf("parsing the cloud provider config: %w", err)
+	}
+	if parsed.TenantID == "" {
+		return "", fmt.Errorf("the cloud provider config names no tenantId")
+	}
+	return parsed.TenantID, nil
 }
 
 // reuseCRs keeps a previous run's custom resources instead of starting

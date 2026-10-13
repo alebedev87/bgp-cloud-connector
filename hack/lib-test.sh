@@ -822,6 +822,7 @@ echo "--- azure/lib.sh: azure_cluster_facts ---"
 stub_infra="mycluster-abcde"
 stub_rg="mycluster-abcde-rg"
 stub_net_rg=""
+stub_cloud_config=""
 stub_oc_rc=0
 
 # Reached through azure_cluster_facts rather than by name.
@@ -838,6 +839,7 @@ oc() {
         *infrastructureName*)          printf '%s' "${stub_infra}" ;;
         *azure.resourceGroupName*)     printf '%s' "${stub_rg}" ;;
         *azure.networkResourceGroupName*) printf '%s' "${stub_net_rg}" ;;
+        *cloud-provider-config*)       printf '%s' "${stub_cloud_config}" ;;
         *) echo "unstubbed oc call: $*" >&2; return 1 ;;
     esac
 }
@@ -855,6 +857,27 @@ stub_net_rg="someone-elses-network-rg"
 check "keeps a network resource group that differs" \
     "$(cat "${workdir}/facts")" "someone-elses-network-rg"
 stub_net_rg=""
+
+# ARO HCP leaves networkResourceGroupName out altogether, and its
+# resourceGroupName is the managed group, which holds no vnet. The
+# Azure cloud provider's own configuration names the vnet's group.
+stub_cloud_config='{"resourceGroup":"aro-mycluster","vnetName":"customer-vnet","vnetResourceGroup":"customer-rg"}'
+( azure_cluster_facts; echo "${rg} ${net_rg}" ) >"${workdir}/facts" 2>&1
+check "takes the vnet's group from the cloud config when the infrastructure names none" \
+    "$(cat "${workdir}/facts")" "mycluster-abcde-rg customer-rg"
+
+stub_cloud_config='{"resourceGroup":"aro-mycluster"}'
+( azure_cluster_facts; echo "${net_rg}" ) >"${workdir}/facts" 2>&1
+check "falls back to the cluster's group when neither names one" \
+    "$(cat "${workdir}/facts")" "mycluster-abcde-rg"
+
+stub_net_rg="someone-elses-network-rg"
+stub_cloud_config='{"vnetResourceGroup":"customer-rg"}'
+( azure_cluster_facts; echo "${net_rg}" ) >"${workdir}/facts" 2>&1
+check "prefers the infrastructure's network group to the cloud config's" \
+    "$(cat "${workdir}/facts")" "someone-elses-network-rg"
+stub_net_rg=""
+stub_cloud_config=""
 
 stub_oc_rc=1
 out="$( ( set -o errexit; azure_cluster_facts ) 2>&1 )"

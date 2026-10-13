@@ -121,6 +121,17 @@ azure_cluster_facts() {
     net_rg="$(oc get infrastructure cluster \
         -o jsonpath='{.status.platformStatus.azure.networkResourceGroupName}' 2>"${err}")" \
         || die "could not read the network resource group from the cluster" "$(<"${err}")"
+
+    # ARO HCP leaves it out, and its resourceGroupName is the managed
+    # group, which holds the nodes but no vnet. The Azure cloud
+    # provider's configuration names the vnet's group on every Azure
+    # cluster, so that is asked next. A cluster without it falls back
+    # to its own group, as before.
+    if [[ -z "${net_rg}" ]]; then
+        net_rg="$(oc -n openshift-config get configmap cloud-provider-config \
+            -o jsonpath='{.data.config}' 2>/dev/null \
+            | jq -r '.vnetResourceGroup // empty' 2>/dev/null)" || net_rg=""
+    fi
     : "${net_rg:=${rg}}"
 
     rm -f "${err}"

@@ -115,28 +115,18 @@ func (p *Platform) ReconcileNodes(ctx context.Context, nodes []platform.RouterNo
 		return nil
 	}
 
-	if err := p.reconcileRouteServerPeers(ctx, nodes); err != nil {
-		return fmt.Errorf("reconciling route server peers: %w", err)
+	if peers := platform.Speakers(nodes); len(peers) > 0 {
+		if err := p.reconcileRouteServerPeers(ctx, peers); err != nil {
+			return fmt.Errorf("reconciling route server peers: %w", err)
+		}
+		logger.Info("route server peers reconciled", "nodeCount", len(peers))
 	}
-	logger.Info("route server peers reconciled", "nodeCount", len(nodes))
 
 	if err := p.disableSourceDestCheck(ctx, nodes); err != nil {
 		return fmt.Errorf("disabling source/dest check: %w", err)
 	}
 	logger.Info("source/dest check verified", "nodeCount", len(nodes))
 
-	return nil
-}
-
-// EnsureForwarding clears SourceDestCheck on nodes that are not BGP speakers.
-// ReconcileNodes already does this for speakers, and also peers them.
-func (p *Platform) EnsureForwarding(ctx context.Context, nodes []platform.RouterNode) error {
-	if len(nodes) == 0 {
-		return nil
-	}
-	if err := p.disableSourceDestCheck(ctx, nodes); err != nil {
-		return fmt.Errorf("disabling source/dest check: %w", err)
-	}
 	return nil
 }
 

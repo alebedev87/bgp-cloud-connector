@@ -325,21 +325,11 @@ func (r *BGPCloudConfigurationReconciler) Reconcile(ctx context.Context, req ctr
 	readyPhase := true
 	if cloudPlatform != nil {
 		log.Info("Phase 5: reconciling cloud resources")
-		nodes, incomplete, err := r.listSelectedNodes(ctx, config.Spec.RouterNodeSelector)
+		nodes, incomplete, err := r.listNodes(ctx, config)
 		if err != nil {
 			return r.setDegraded(ctx, config, *baselineStatus, networkingapi.ConditionCloudResourcesReconciled,
-				"CloudReconcileFailed", fmt.Sprintf("failed to list router nodes: %v", err))
+				"CloudReconcileFailed", fmt.Sprintf("failed to list selected nodes: %v", err))
 		}
-		// Forwarding on non-speakers is a separate call. ReconcileNodes also
-		// peers, and on GCP joins NCC spokes and may restart the instance for
-		// nested virtualization. An empty selector matches every node, so a
-		// missing or empty map adds nobody.
-		forwarding, forwardingIncomplete, err := r.forwardingNodes(ctx, config, nodes)
-		if err != nil {
-			return r.setDegraded(ctx, config, *baselineStatus, networkingapi.ConditionCloudResourcesReconciled,
-				"CloudReconcileFailed", fmt.Sprintf("failed to list forwarding nodes: %v", err))
-		}
-		incomplete = mergeIncomplete(incomplete, forwardingIncomplete)
 		readyPhase = len(incomplete) == 0
 		if readyPhase {
 			meta.SetStatusCondition(&config.Status.Conditions, metav1.Condition{
@@ -363,10 +353,6 @@ func (r *BGPCloudConfigurationReconciler) Reconcile(ctx context.Context, req ctr
 		if err := cloudPlatform.ReconcileNodes(ctx, nodes); err != nil {
 			return r.setDegraded(ctx, config, *baselineStatus, networkingapi.ConditionCloudResourcesReconciled,
 				"CloudReconcileFailed", fmt.Sprintf("failed to reconcile cloud resources: %v", err))
-		}
-		if err := cloudPlatform.EnsureForwarding(ctx, forwarding); err != nil {
-			return r.setDegraded(ctx, config, *baselineStatus, networkingapi.ConditionCloudResourcesReconciled,
-				"CloudReconcileFailed", fmt.Sprintf("failed to enable forwarding: %v", err))
 		}
 		if readyPhase {
 			meta.SetStatusCondition(&config.Status.Conditions, metav1.Condition{
@@ -607,22 +593,22 @@ func getInfrastructureName(ctx context.Context, c client.Client) (string, error)
 	return name, nil
 }
 
-// forwardingNodes lists nodes matching forwardingNodeSelector that are not
-// already speakers. ReconcileNodes already updates the speakers' interfaces.
-// A nil or empty selector adds nobody. SelectorFromSet of an empty map
-// matches every node, which is why the length is checked first.
-func (r *BGPCloudConfigurationReconciler) forwardingNodes(ctx context.Context, config *networkingapi.BGPCloudConfiguration, routers []platform.RouterNode) (complete []platform.RouterNode, incomplete []platform.RouterNode, err error) {
-	if len(config.Spec.ForwardingNodeSelector) == 0 {
-		return nil, nil, nil
-	}
-	selected, incomplete, err := r.listSelectedNodes(ctx, config.Spec.ForwardingNodeSelector)
+func (r *BGPCloudConfigurationReconciler) listNodes(ctx context.Context, config *networkingapi.BGPCloudConfiguration) (complete []platform.RouterNode, incomplete []platform.RouterNode, err error) {
+	speakers, incomplete, err := r.listNodesForSelector(ctx, config.Spec.RouterNodeSelector, false)
 	if err != nil {
 		return nil, nil, err
 	}
-	return nodesExcept(selected, routers), incomplete, nil
+	if len(config.Spec.ForwardingNodeSelector) == 0 {
+		return speakers, incomplete, nil
+	}
+	forwarding, forwardingIncomplete, err := r.listNodesForSelector(ctx, config.Spec.ForwardingNodeSelector, true)
+	if err != nil {
+		return nil, nil, err
+	}
+	return appendAbsentNodes(speakers, forwarding), appendAbsentNodes(incomplete, forwardingIncomplete), nil
 }
 
-func (r *BGPCloudConfigurationReconciler) listSelectedNodes(ctx context.Context, selector map[string]string) (complete []platform.RouterNode, incomplete []platform.RouterNode, err error) {
+func (r *BGPCloudConfigurationReconciler) listNodesForSelector(ctx context.Context, selector map[string]string, forwardingOnly bool) (complete []platform.RouterNode, incomplete []platform.RouterNode, err error) {
 	nodeList := &corev1.NodeList{}
 	sel := labels.SelectorFromSet(selector)
 	if err := r.List(ctx, nodeList, client.MatchingLabelsSelector{Selector: sel}); err != nil {
@@ -633,9 +619,10 @@ func (r *BGPCloudConfigurationReconciler) listSelectedNodes(ctx context.Context,
 	for i := range nodeList.Items {
 		node := &nodeList.Items[i]
 		rn := platform.RouterNode{
-			Name:       node.Name,
-			ProviderID: node.Spec.ProviderID,
-			Zone:       node.Labels["topology.kubernetes.io/zone"],
+			Name:           node.Name,
+			ProviderID:     node.Spec.ProviderID,
+			Zone:           node.Labels["topology.kubernetes.io/zone"],
+			ForwardingOnly: forwardingOnly,
 		}
 		for _, addr := range node.Status.Addresses {
 			if addr.Type == corev1.NodeInternalIP {
@@ -670,34 +657,6 @@ func formatIncompleteNodesMessage(incomplete []platform.RouterNode) string {
 		parts = append(parts, n.Name+" (missing "+strings.Join(missing, "/")+")")
 	}
 	return truncateConditionMessage(fmt.Sprintf("%d selected node(s) incomplete: %s", len(incomplete), strings.Join(parts, "; ")))
-}
-
-func nodesExcept(nodes, exclude []platform.RouterNode) []platform.RouterNode {
-	skip := make(map[string]struct{}, len(exclude))
-	for _, n := range exclude {
-		skip[n.Name] = struct{}{}
-	}
-	out := make([]platform.RouterNode, 0, len(nodes))
-	for _, n := range nodes {
-		if _, found := skip[n.Name]; found {
-			continue
-		}
-		out = append(out, n)
-	}
-	return out
-}
-
-func mergeIncomplete(a, b []platform.RouterNode) []platform.RouterNode {
-	seen := make(map[string]struct{}, len(a)+len(b))
-	out := make([]platform.RouterNode, 0, len(a)+len(b))
-	for _, n := range append(append([]platform.RouterNode{}, a...), b...) {
-		if _, found := seen[n.Name]; found {
-			continue
-		}
-		seen[n.Name] = struct{}{}
-		out = append(out, n)
-	}
-	return out
 }
 
 // truncateConditionMessage keeps a message inside the 32768-byte limit the API
@@ -914,4 +873,20 @@ func (r *BGPCloudConfigurationReconciler) SetupWithManager(mgr ctrl.Manager) err
 		})).
 		Named("bgpcloudconfiguration").
 		Complete(r)
+}
+
+// appendAbsentNodes appends nodes from extra whose names are not already in first.
+func appendAbsentNodes(first, extra []platform.RouterNode) []platform.RouterNode {
+	seen := make(map[string]struct{}, len(first))
+	for _, n := range first {
+		seen[n.Name] = struct{}{}
+	}
+	for _, n := range extra {
+		if _, found := seen[n.Name]; found {
+			continue
+		}
+		seen[n.Name] = struct{}{}
+		first = append(first, n)
+	}
+	return first
 }

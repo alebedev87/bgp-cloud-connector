@@ -5,7 +5,7 @@ import (
 	"errors"
 )
 
-// RouterNode is a node the cloud will peer with.
+// RouterNode is a cluster node the cloud reconciles.
 type RouterNode struct {
 	Name      string
 	PrivateIP string
@@ -14,6 +14,20 @@ type RouterNode struct {
 	// the clouds that need it.
 	Zone       string
 	ProviderID string
+	// ForwardingOnly marks a node that is not a BGP speaker.
+	ForwardingOnly bool
+}
+
+// Speakers returns the nodes that are BGP speakers.
+func Speakers(nodes []RouterNode) []RouterNode {
+	out := make([]RouterNode, 0, len(nodes))
+	for _, n := range nodes {
+		if n.ForwardingOnly {
+			continue
+		}
+		out = append(out, n)
+	}
+	return out
 }
 
 // DiscoveredNeighbor is one address the router nodes peer with.
@@ -80,12 +94,5 @@ func (e *CredentialError) Error() string {
 type CloudPlatform interface {
 	DiscoverEndpoints(ctx context.Context) (*DiscoveryResult, error)
 	ReconcileNodes(ctx context.Context, nodes []RouterNode) error
-	// EnsureForwarding lets the given nodes pass packets that are not
-	// addressed to them. Speakers already receive this from ReconcileNodes;
-	// this is how other nodes get it without becoming peers. An empty list
-	// does nothing, so an unset selector and a selector that matches nobody
-	// are the same call. It must not create peers, join NCC spokes, or
-	// restart instances.
-	EnsureForwarding(ctx context.Context, nodes []RouterNode) error
 	Cleanup(ctx context.Context) error
 }

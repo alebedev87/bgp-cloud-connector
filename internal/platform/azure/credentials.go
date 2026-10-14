@@ -205,6 +205,33 @@ func ResolveCredentials(ctx context.Context, c client.Client, namespace string, 
 		return nil, "", fmt.Errorf("reading secret %s/%s: %w", namespace, CredentialsSecretName, err)
 	}
 
+	// The identity the Subscription names, used directly. Where CCO runs
+	// it writes the secret from this same identity and the next reconcile
+	// takes the path above; where nothing answers the request, as on ARO
+	// HCP, this is the only way the credential arrives. An identity that
+	// cannot authenticate leads to the wait, whose message names it and
+	// why, and never to the ambient credential: that would act with
+	// other permissions and hide the failure.
+	if id, _ := identityFromEnvironment(); id != nil {
+		cred, err := azidentity.NewWorkloadIdentityCredential(&azidentity.WorkloadIdentityCredentialOptions{
+			ClientID:      id.clientID,
+			TenantID:      id.tenantID,
+			TokenFilePath: cloudTokenPath,
+		})
+		if err == nil {
+			err = validateCredential(ctx, cred)
+		}
+		if rerr := reconcileCredentialsRequest(ctx, c, namespace, owner); rerr != nil {
+			return nil, "", rerr
+		}
+		if err != nil {
+			return nil, "", fmt.Errorf("%w: secret %s/%s has not been written yet, and managed identity %s could not authenticate: %v",
+				platform.ErrCredentialsPending, namespace, CredentialsSecretName, id.clientID, err)
+		}
+		logger.V(1).Info("using the managed identity the Subscription names", "clientID", id.clientID)
+		return cred, id.tenantID, nil
+	}
+
 	if cred, err := ambientCredential(); err == nil {
 		if err := validateCredential(ctx, cred); err == nil {
 			logger.V(1).Info("using the credential already available to this process")
@@ -252,15 +279,11 @@ func identityFromEnvironment() (*federatedIdentity, []string) {
 }
 
 // pendingError says, on a cluster that federates, why the wait will not
-// end on its own. CCO writes nothing for a request that names no
-// identity, so without this the condition reports a wait and never its
-// cause.
+// end on its own. It is reached only when the Subscription names no
+// identity, and CCO writes nothing for a request that names none, so
+// without this the condition reports a wait and never its cause.
 func pendingError(namespace string) error {
-	id, missing := identityFromEnvironment()
-	if id != nil {
-		return fmt.Errorf("%w: secret %s/%s has not been written yet, for managed identity %s",
-			platform.ErrCredentialsPending, namespace, CredentialsSecretName, id.clientID)
-	}
+	_, missing := identityFromEnvironment()
 	return fmt.Errorf("%w: secret %s/%s has not been written. On a cluster with credentialsMode Manual the cloud credential operator will not write it until the Subscription names the managed identity to use; set %s",
 		platform.ErrCredentialsPending, namespace, CredentialsSecretName, strings.Join(missing, ", "))
 }

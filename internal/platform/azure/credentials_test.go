@@ -19,6 +19,7 @@ package azure
 import (
 	"context"
 	"errors"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"slices"
@@ -568,6 +569,100 @@ func TestResolveCredentials_TokenAuthNamesTheIdentity(t *testing.T) {
 	} {
 		if got, _, _ := unstructured.NestedString(cr.Object, "spec", "providerSpec", field); got != want {
 			t.Errorf("providerSpec.%s = %q, want %q", field, got, want)
+		}
+	}
+}
+
+// Where nothing answers the request, as on ARO HCP, which has no CCO,
+// the identity the Subscription names is used directly, federating with
+// the projected token as CCO's secret would have said to. The request
+// is still made, so a cluster that does run CCO ends up on its secret.
+func TestResolveCredentials_TokenAuthWithoutSecretUsesTheIdentity(t *testing.T) {
+	withAmbient(t, nil)
+	withValidation(t, nil)
+	withTokenAuth(t, "client-id", "tenant-id", "subscription-id", "uksouth")
+	c := fake.NewClientBuilder().WithScheme(credentialsTestScheme(t)).Build()
+
+	cred, tenantID, err := ResolveCredentials(context.Background(), c, testNamespace, testOwner())
+	if err != nil {
+		t.Fatalf("ResolveCredentials: %v", err)
+	}
+	if _, ok := cred.(*azidentity.WorkloadIdentityCredential); !ok {
+		t.Errorf("got %T, want *azidentity.WorkloadIdentityCredential", cred)
+	}
+	if tenantID != "tenant-id" {
+		t.Errorf("tenant: got %q, want %q", tenantID, "tenant-id")
+	}
+
+	cr := getCredentialsRequest(t, c)
+	if got, _, _ := unstructured.NestedString(cr.Object, "spec", "providerSpec", "azureClientID"); got != "client-id" {
+		t.Errorf("providerSpec.azureClientID = %q, want %q", got, "client-id")
+	}
+}
+
+// Where nothing answers the request, a refused identity leaves the
+// operator waiting with nothing to end the wait, so the condition
+// carries Azure's reason for the refusal.
+func TestResolveCredentials_TokenAuthRefusedSaysWhy(t *testing.T) {
+	withAmbient(t, nil)
+	withValidation(t, errors.New("AADSTS70021: No matching federated identity record found"))
+	withTokenAuth(t, "client-id", "tenant-id", "subscription-id", "uksouth")
+	c := fake.NewClientBuilder().WithScheme(credentialsTestScheme(t)).Build()
+
+	_, _, err := ResolveCredentials(context.Background(), c, testNamespace, testOwner())
+	if !errors.Is(err, platform.ErrCredentialsPending) {
+		t.Fatalf("ResolveCredentials: got %v, want %v", err, platform.ErrCredentialsPending)
+	}
+	for _, want := range []string{"client-id", "AADSTS70021"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("the wait does not say %q: %v", want, err)
+		}
+	}
+}
+
+// The identity the Subscription names is the one the operator acts as.
+// When it is refused, a credential this process happens to have would
+// carry other permissions and hide the refusal, so the operator waits
+// and says why rather than using it.
+func TestResolveCredentials_TokenAuthRefusedIgnoresAmbient(t *testing.T) {
+	withAmbient(t, stubCredential{})
+	previous := validateCredential
+	validateCredential = func(_ context.Context, cred azcore.TokenCredential) error {
+		if _, ok := cred.(*azidentity.WorkloadIdentityCredential); ok {
+			return errors.New("AADSTS70021: No matching federated identity record found")
+		}
+		return nil
+	}
+	t.Cleanup(func() { validateCredential = previous })
+	withTokenAuth(t, "client-id", "tenant-id", "subscription-id", "uksouth")
+	c := fake.NewClientBuilder().WithScheme(credentialsTestScheme(t)).Build()
+
+	cred, _, err := ResolveCredentials(context.Background(), c, testNamespace, testOwner())
+	if !errors.Is(err, platform.ErrCredentialsPending) {
+		t.Fatalf("ResolveCredentials: got %T, %v, want %v", cred, err, platform.ErrCredentialsPending)
+	}
+	if !strings.Contains(err.Error(), "AADSTS70021") {
+		t.Errorf("the wait does not say why: %v", err)
+	}
+	getCredentialsRequest(t, c)
+}
+
+// A token the pod was never given is not Azure refusing the identity,
+// so the wait says the identity could not authenticate and passes on
+// the SDK's reason, which names the file.
+func TestResolveCredentials_TokenAuthMissingTokenSaysSo(t *testing.T) {
+	withAmbient(t, nil)
+	withValidation(t, &fs.PathError{Op: "open", Path: cloudTokenPath, Err: fs.ErrNotExist})
+	withTokenAuth(t, "client-id", "tenant-id", "subscription-id", "uksouth")
+	c := fake.NewClientBuilder().WithScheme(credentialsTestScheme(t)).Build()
+
+	_, _, err := ResolveCredentials(context.Background(), c, testNamespace, testOwner())
+	if !errors.Is(err, platform.ErrCredentialsPending) {
+		t.Fatalf("ResolveCredentials: got %v, want %v", err, platform.ErrCredentialsPending)
+	}
+	for _, want := range []string{"could not authenticate", cloudTokenPath} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("the wait does not say %q: %v", want, err)
 		}
 	}
 }

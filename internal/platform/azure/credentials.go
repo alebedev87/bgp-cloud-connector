@@ -205,6 +205,32 @@ func ResolveCredentials(ctx context.Context, c client.Client, namespace string, 
 		return nil, "", fmt.Errorf("reading secret %s/%s: %w", namespace, CredentialsSecretName, err)
 	}
 
+	// The identity the Subscription names, used directly. Where CCO runs
+	// it writes the secret from this same identity and the next reconcile
+	// takes the path above; where nothing answers the request, as on ARO
+	// HCP, this is the only way the credential arrives. A credential that
+	// is refused falls through to the wait, whose message names the
+	// identity and why it was refused.
+	var refused error
+	if id, _ := identityFromEnvironment(); id != nil {
+		cred, err := azidentity.NewWorkloadIdentityCredential(&azidentity.WorkloadIdentityCredentialOptions{
+			ClientID:      id.clientID,
+			TenantID:      id.tenantID,
+			TokenFilePath: cloudTokenPath,
+		})
+		if err == nil {
+			err = validateCredential(ctx, cred)
+		}
+		refused = err
+		if err == nil {
+			if err := reconcileCredentialsRequest(ctx, c, namespace, owner); err != nil {
+				return nil, "", err
+			}
+			logger.V(1).Info("using the managed identity the Subscription names", "clientID", id.clientID)
+			return cred, id.tenantID, nil
+		}
+	}
+
 	if cred, err := ambientCredential(); err == nil {
 		if err := validateCredential(ctx, cred); err == nil {
 			logger.V(1).Info("using the credential already available to this process")
@@ -215,7 +241,7 @@ func ResolveCredentials(ctx context.Context, c client.Client, namespace string, 
 	if err := reconcileCredentialsRequest(ctx, c, namespace, owner); err != nil {
 		return nil, "", err
 	}
-	return nil, "", pendingError(namespace)
+	return nil, "", pendingError(namespace, refused)
 }
 
 // federatedIdentity is the managed identity the Subscription names for
@@ -254,9 +280,14 @@ func identityFromEnvironment() (*federatedIdentity, []string) {
 // pendingError says, on a cluster that federates, why the wait will not
 // end on its own. CCO writes nothing for a request that names no
 // identity, so without this the condition reports a wait and never its
-// cause.
-func pendingError(namespace string) error {
+// cause. refused is why using the identity directly failed, if it did:
+// where nothing writes the secret, that is the only cause there is.
+func pendingError(namespace string, refused error) error {
 	id, missing := identityFromEnvironment()
+	if id != nil && refused != nil {
+		return fmt.Errorf("%w: secret %s/%s has not been written yet, and managed identity %s was refused: %v",
+			platform.ErrCredentialsPending, namespace, CredentialsSecretName, id.clientID, refused)
+	}
 	if id != nil {
 		return fmt.Errorf("%w: secret %s/%s has not been written yet, for managed identity %s",
 			platform.ErrCredentialsPending, namespace, CredentialsSecretName, id.clientID)

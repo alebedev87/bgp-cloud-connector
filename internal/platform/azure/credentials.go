@@ -209,9 +209,9 @@ func ResolveCredentials(ctx context.Context, c client.Client, namespace string, 
 	// it writes the secret from this same identity and the next reconcile
 	// takes the path above; where nothing answers the request, as on ARO
 	// HCP, this is the only way the credential arrives. An identity that
-	// is refused leads to the wait, whose message names it and why it was
-	// refused, and never to the ambient credential: that would act with
-	// other permissions and hide the refusal.
+	// cannot authenticate leads to the wait, whose message names it and
+	// why, and never to the ambient credential: that would act with
+	// other permissions and hide the failure.
 	if id, _ := identityFromEnvironment(); id != nil {
 		cred, err := azidentity.NewWorkloadIdentityCredential(&azidentity.WorkloadIdentityCredentialOptions{
 			ClientID:      id.clientID,
@@ -225,7 +225,7 @@ func ResolveCredentials(ctx context.Context, c client.Client, namespace string, 
 			return nil, "", rerr
 		}
 		if err != nil {
-			return nil, "", fmt.Errorf("%w: secret %s/%s has not been written yet, and managed identity %s was refused: %v",
+			return nil, "", fmt.Errorf("%w: secret %s/%s has not been written yet, and managed identity %s could not authenticate: %v",
 				platform.ErrCredentialsPending, namespace, CredentialsSecretName, id.clientID, err)
 		}
 		logger.V(1).Info("using the managed identity the Subscription names", "clientID", id.clientID)

@@ -19,6 +19,7 @@ package azure
 import (
 	"context"
 	"errors"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"slices"
@@ -644,6 +645,26 @@ func TestResolveCredentials_TokenAuthRefusedIgnoresAmbient(t *testing.T) {
 		t.Errorf("the wait does not say why: %v", err)
 	}
 	getCredentialsRequest(t, c)
+}
+
+// A token the pod was never given is not Azure refusing the identity,
+// so the wait says the identity could not authenticate and passes on
+// the SDK's reason, which names the file.
+func TestResolveCredentials_TokenAuthMissingTokenSaysSo(t *testing.T) {
+	withAmbient(t, nil)
+	withValidation(t, &fs.PathError{Op: "open", Path: cloudTokenPath, Err: fs.ErrNotExist})
+	withTokenAuth(t, "client-id", "tenant-id", "subscription-id", "uksouth")
+	c := fake.NewClientBuilder().WithScheme(credentialsTestScheme(t)).Build()
+
+	_, _, err := ResolveCredentials(context.Background(), c, testNamespace, testOwner())
+	if !errors.Is(err, platform.ErrCredentialsPending) {
+		t.Fatalf("ResolveCredentials: got %v, want %v", err, platform.ErrCredentialsPending)
+	}
+	for _, want := range []string{"could not authenticate", cloudTokenPath} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("the wait does not say %q: %v", want, err)
+		}
+	}
 }
 
 // The console asks for no region, and CCO refuses a request without

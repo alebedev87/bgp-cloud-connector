@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"net"
 	"sort"
+	"strconv"
 	"strings"
 
 	appsv1 "k8s.io/api/apps/v1"
@@ -199,12 +200,13 @@ func primaryNetworkAddress(pod *corev1.Pod) (string, error) {
 
 // ProbeScript is the shell a client runs to request /clientip from every
 // address, one line per address: "<address> <answer>", with the answer
-// empty when the request failed.
+// empty when the request failed. The URL is quoted because an IPv6 host
+// is bracketed, which the shell would otherwise read as a glob.
 func ProbeScript(addresses []string, timeoutSeconds int) string {
 	var b strings.Builder
 	for _, a := range addresses {
-		fmt.Fprintf(&b, "printf '%%s %%s\\n' %s \"$(curl -s -m %d http://%s:%d/clientip)\"\n",
-			a, timeoutSeconds, a, NetexecPort)
+		fmt.Fprintf(&b, "printf '%%s %%s\\n' %s \"$(curl -s -m %d 'http://%s/clientip')\"\n",
+			a, timeoutSeconds, net.JoinHostPort(a, strconv.Itoa(NetexecPort)))
 	}
 	return b.String()
 }

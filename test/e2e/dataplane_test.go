@@ -114,6 +114,21 @@ func TestSourceHost(t *testing.T) {
 	}
 }
 
+func TestProbeScriptBracketsIPv6(t *testing.T) {
+	for addr, url := range map[string]string{
+		"10.100.0.3": "http://10.100.0.3:8080/clientip",
+		"fd00::3":    "http://[fd00::3]:8080/clientip",
+	} {
+		script := ProbeScript([]string{addr}, 5)
+		if !strings.Contains(script, url) {
+			t.Errorf("ProbeScript(%q) does not request %s:\n%s", addr, url, script)
+		}
+		if !strings.Contains(script, "printf '%s %s\\n' "+addr+" ") {
+			t.Errorf("ProbeScript(%q) does not print the bare address:\n%s", addr, script)
+		}
+	}
+}
+
 func TestProbeRound(t *testing.T) {
 	console := strings.Join([]string{
 		"[    8.4] cloud-init[1946]: Cloud-init v. 22.2.2 finished",

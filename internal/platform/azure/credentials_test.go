@@ -619,6 +619,33 @@ func TestResolveCredentials_TokenAuthRefusedSaysWhy(t *testing.T) {
 	}
 }
 
+// The identity the Subscription names is the one the operator acts as.
+// When it is refused, a credential this process happens to have would
+// carry other permissions and hide the refusal, so the operator waits
+// and says why rather than using it.
+func TestResolveCredentials_TokenAuthRefusedIgnoresAmbient(t *testing.T) {
+	withAmbient(t, stubCredential{})
+	previous := validateCredential
+	validateCredential = func(_ context.Context, cred azcore.TokenCredential) error {
+		if _, ok := cred.(*azidentity.WorkloadIdentityCredential); ok {
+			return errors.New("AADSTS70021: No matching federated identity record found")
+		}
+		return nil
+	}
+	t.Cleanup(func() { validateCredential = previous })
+	withTokenAuth(t, "client-id", "tenant-id", "subscription-id", "uksouth")
+	c := fake.NewClientBuilder().WithScheme(credentialsTestScheme(t)).Build()
+
+	cred, _, err := ResolveCredentials(context.Background(), c, testNamespace, testOwner())
+	if !errors.Is(err, platform.ErrCredentialsPending) {
+		t.Fatalf("ResolveCredentials: got %T, %v, want %v", cred, err, platform.ErrCredentialsPending)
+	}
+	if !strings.Contains(err.Error(), "AADSTS70021") {
+		t.Errorf("the wait does not say why: %v", err)
+	}
+	getCredentialsRequest(t, c)
+}
+
 // The console asks for no region, and CCO refuses a request without
 // one, so it comes from the cluster when the Subscription carries none.
 func TestResolveCredentials_TokenAuthRegionFromNodes(t *testing.T) {

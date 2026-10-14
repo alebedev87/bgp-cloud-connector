@@ -208,10 +208,10 @@ func ResolveCredentials(ctx context.Context, c client.Client, namespace string, 
 	// The identity the Subscription names, used directly. Where CCO runs
 	// it writes the secret from this same identity and the next reconcile
 	// takes the path above; where nothing answers the request, as on ARO
-	// HCP, this is the only way the credential arrives. A credential that
-	// is refused falls through to the wait, whose message names the
-	// identity and why it was refused.
-	var refused error
+	// HCP, this is the only way the credential arrives. An identity that
+	// is refused leads to the wait, whose message names it and why it was
+	// refused, and never to the ambient credential: that would act with
+	// other permissions and hide the refusal.
 	if id, _ := identityFromEnvironment(); id != nil {
 		cred, err := azidentity.NewWorkloadIdentityCredential(&azidentity.WorkloadIdentityCredentialOptions{
 			ClientID:      id.clientID,
@@ -221,14 +221,15 @@ func ResolveCredentials(ctx context.Context, c client.Client, namespace string, 
 		if err == nil {
 			err = validateCredential(ctx, cred)
 		}
-		refused = err
-		if err == nil {
-			if err := reconcileCredentialsRequest(ctx, c, namespace, owner); err != nil {
-				return nil, "", err
-			}
-			logger.V(1).Info("using the managed identity the Subscription names", "clientID", id.clientID)
-			return cred, id.tenantID, nil
+		if rerr := reconcileCredentialsRequest(ctx, c, namespace, owner); rerr != nil {
+			return nil, "", rerr
 		}
+		if err != nil {
+			return nil, "", fmt.Errorf("%w: secret %s/%s has not been written yet, and managed identity %s was refused: %v",
+				platform.ErrCredentialsPending, namespace, CredentialsSecretName, id.clientID, err)
+		}
+		logger.V(1).Info("using the managed identity the Subscription names", "clientID", id.clientID)
+		return cred, id.tenantID, nil
 	}
 
 	if cred, err := ambientCredential(); err == nil {
@@ -241,7 +242,7 @@ func ResolveCredentials(ctx context.Context, c client.Client, namespace string, 
 	if err := reconcileCredentialsRequest(ctx, c, namespace, owner); err != nil {
 		return nil, "", err
 	}
-	return nil, "", pendingError(namespace, refused)
+	return nil, "", pendingError(namespace)
 }
 
 // federatedIdentity is the managed identity the Subscription names for
@@ -278,20 +279,11 @@ func identityFromEnvironment() (*federatedIdentity, []string) {
 }
 
 // pendingError says, on a cluster that federates, why the wait will not
-// end on its own. CCO writes nothing for a request that names no
-// identity, so without this the condition reports a wait and never its
-// cause. refused is why using the identity directly failed, if it did:
-// where nothing writes the secret, that is the only cause there is.
-func pendingError(namespace string, refused error) error {
-	id, missing := identityFromEnvironment()
-	if id != nil && refused != nil {
-		return fmt.Errorf("%w: secret %s/%s has not been written yet, and managed identity %s was refused: %v",
-			platform.ErrCredentialsPending, namespace, CredentialsSecretName, id.clientID, refused)
-	}
-	if id != nil {
-		return fmt.Errorf("%w: secret %s/%s has not been written yet, for managed identity %s",
-			platform.ErrCredentialsPending, namespace, CredentialsSecretName, id.clientID)
-	}
+// end on its own. It is reached only when the Subscription names no
+// identity, and CCO writes nothing for a request that names none, so
+// without this the condition reports a wait and never its cause.
+func pendingError(namespace string) error {
+	_, missing := identityFromEnvironment()
 	return fmt.Errorf("%w: secret %s/%s has not been written. On a cluster with credentialsMode Manual the cloud credential operator will not write it until the Subscription names the managed identity to use; set %s",
 		platform.ErrCredentialsPending, namespace, CredentialsSecretName, strings.Join(missing, ", "))
 }

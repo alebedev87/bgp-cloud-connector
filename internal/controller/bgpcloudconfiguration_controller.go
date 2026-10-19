@@ -494,7 +494,7 @@ func buildAzurePlatform(ctx context.Context, c client.Client, config *networking
 	// nothing in its chain can produce a token, so without this the
 	// failure arrives from DiscoverEndpoints and reads as a discovery
 	// problem rather than a credentials one.
-	cred, tenantID, err := azureplatform.ResolveCredentials(ctx, c, OperatorNamespace(), configOwnerReference(config))
+	cred, err := azureplatform.ResolveCredentials(ctx, c, OperatorNamespace(), configOwnerReference(config))
 	if err != nil {
 		return nil, err
 	}
@@ -504,8 +504,6 @@ func buildAzurePlatform(ctx context.Context, c client.Client, config *networking
 		SubscriptionID:  azureSpec.SubscriptionID,
 		ResourceGroup:   azureSpec.ResourceGroup,
 		RouteServerName: azureSpec.RouteServerName,
-		NICClientID:     azureSpec.NetworkInterfaceClientID,
-		TenantID:        tenantID,
 		LocalASN:        config.Spec.BGP.LocalASN,
 		ClusterID:       clusterID,
 	})

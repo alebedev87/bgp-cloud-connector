@@ -58,7 +58,6 @@ Azure-specific behaviour:
 - **eBGP multi-hop is mandatory.** The Route Server sits in its own subnet rather than on the node's link, so every neighbour is configured with eBGP multi-hop.
 - **The far-side ASN is fixed** by the hub and is not configurable.
 - **Ownership is by name, not tags.** Azure BGP connections carry no tags, so the connection **name** (`<infrastructureName>-bgp-<node-ip>`) is the lifecycle marker; connections that don't match are left alone (other clusters' peerings are preserved). Names are keyed on the node IP for session stability and capped at 80 characters.
-- **Cross-resource-group interfaces.** The router-node NICs and the Route Server can be reachable by different identities (the ARO case). `spec.azure.networkInterfaceClientID` names a separate managed identity used for NIC calls only — see [Azure authentication](azure-authentication.md).
 
 ## GCP platform
 

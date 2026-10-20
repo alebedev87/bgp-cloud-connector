@@ -28,16 +28,7 @@ type Config struct {
 	// ClusterID names the peerings, so that a Route Server reached by more
 	// than one cluster does not have them confused.
 	ClusterID string
-	// NICClientID is the managed identity to use for network interface calls.
-	// Empty means the same identity as everything else.
-	NICClientID string
-	// TenantID is the tenant NICClientID lives in: the operator's own,
-	// read from its credential secret. Empty where the credential did not
-	// come from one.
-	TenantID string
-	// Credential authenticates every Azure call this platform makes,
-	// except the network interface calls when NICClientID names a
-	// different identity for those.
+	// Credential authenticates every Azure call this platform makes.
 	//
 	// Passed in rather than built here, because what it should be is a
 	// property of the cluster the operator is running on -- a secret the
@@ -64,7 +55,7 @@ func New(cfg Config) (*Platform, error) {
 	if err != nil {
 		return nil, &platform.CredentialError{Msg: fmt.Sprintf("Azure virtual hub client: %v", err)}
 	}
-	nics, err := NewNICClient(cfg.SubscriptionID, cfg.NICClientID, cfg.TenantID, cfg.Credential)
+	nics, err := NewNICClient(cfg.SubscriptionID, cfg.Credential)
 	if err != nil {
 		return nil, &platform.CredentialError{Msg: fmt.Sprintf("Azure network interface client: %v", err)}
 	}

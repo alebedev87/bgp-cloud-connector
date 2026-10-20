@@ -81,7 +81,7 @@ spec:
 
 ### Azure
 
-The addresses and remote ASN are read from the Route Server (which Azure models as a Virtual Hub), so there is nothing per-endpoint to enumerate. See [azure-authentication.md](azure-authentication.md) for `networkInterfaceClientID`.
+The addresses and remote ASN are read from the Route Server (which Azure models as a Virtual Hub), so there is nothing per-endpoint to enumerate. See [azure-authentication.md](azure-authentication.md) for the credentials it needs.
 
 ```yaml
 apiVersion: networking.openshift.io/v1beta1
@@ -101,7 +101,6 @@ spec:
     subscriptionID: <subscription-id>
     resourceGroup: <resource-group>
     routeServerName: <route-server-name>   # Azure Route Server (a Virtual Hub)
-    # networkInterfaceClientID: <client-id> # optional — ARO cross-resource-group case
 ```
 
 ### GCP
@@ -185,7 +184,6 @@ spec:
 | `spec.azure.subscriptionID` | Under `platform: Azure` | Azure subscription ID. |
 | `spec.azure.resourceGroup` | Under `platform: Azure` | Resource group holding the Route Server. |
 | `spec.azure.routeServerName` | Under `platform: Azure` | The Azure Route Server (modeled as a Virtual Hub). Its `virtualRouterIps` become the BGP neighbours and its `virtualRouterAsn` the remote ASN — read from it, not declared. Azure fixes the far-side ASN. |
-| `spec.azure.networkInterfaceClientID` | No | Managed identity client ID for network-interface calls, where the interfaces sit in a resource group a different identity reaches (e.g. ARO). Unset means one identity reaches both the Route Server and the interfaces. See [azure-authentication.md](azure-authentication.md). |
 | `spec.gcp.project` | Under `platform: GCP` | GCP project ID. |
 | `spec.gcp.region` | Under `platform: GCP` | GCP region. |
 | `spec.gcp.cloudRouterName` | Under `platform: GCP` | The Cloud Router the router nodes peer with; its interface addresses become the BGP neighbours and its `bgp.asn` the remote ASN. Must **not** be the installer's Cloud NAT router (no interfaces, carries cluster egress). |

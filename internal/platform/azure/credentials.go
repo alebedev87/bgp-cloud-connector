@@ -161,15 +161,9 @@ var ambientCredential = func() (azcore.TokenCredential, error) {
 //
 // The credential type is named rather than left to the chain, as every
 // other operator here does it: which credential is in use should be
-// readable from the code, the chain reaches IMDS and IMDS is
-// unreachable from a pod, and spec.azure.networkInterfaceClientID means
-// two identities can be in play at once, which one process-wide chain
-// cannot express.
-//
-// The tenant is returned beside the credential because the second
-// identity lives in it and nothing else in the pod names it. It is the
-// secret's; a credential found by the SDK's chain comes with none.
-func ResolveCredentials(ctx context.Context, c client.Client, namespace string, owner metav1.OwnerReference) (azcore.TokenCredential, string, error) {
+// readable from the code, and the chain reaches IMDS and IMDS is
+// unreachable from a pod.
+func ResolveCredentials(ctx context.Context, c client.Client, namespace string, owner metav1.OwnerReference) (azcore.TokenCredential, error) {
 	logger := log.FromContext(ctx)
 
 	secret := &corev1.Secret{}
@@ -178,10 +172,10 @@ func ResolveCredentials(ctx context.Context, c client.Client, namespace string, 
 	case err == nil:
 		cred, err := credentialFromSecret(secret)
 		if err != nil {
-			return nil, "", err
+			return nil, err
 		}
 		if err := validateCredential(ctx, cred); err != nil {
-			return nil, "", &platform.CredentialError{
+			return nil, &platform.CredentialError{
 				Msg: fmt.Sprintf("the credential in secret %s/%s was refused: %v",
 					namespace, CredentialsSecretName, err),
 			}
@@ -198,11 +192,11 @@ func ResolveCredentials(ctx context.Context, c client.Client, namespace string, 
 		// an operator that cannot write its own request is worth
 		// seeing.
 		if err := reconcileCredentialsRequest(ctx, c, namespace, owner); err != nil {
-			return nil, "", err
+			return nil, err
 		}
-		return cred, string(secret.Data[secretTenantID]), nil
+		return cred, nil
 	case !apierrors.IsNotFound(err):
-		return nil, "", fmt.Errorf("reading secret %s/%s: %w", namespace, CredentialsSecretName, err)
+		return nil, fmt.Errorf("reading secret %s/%s: %w", namespace, CredentialsSecretName, err)
 	}
 
 	// The identity the Subscription names, used directly. Where CCO runs
@@ -222,27 +216,27 @@ func ResolveCredentials(ctx context.Context, c client.Client, namespace string, 
 			err = validateCredential(ctx, cred)
 		}
 		if rerr := reconcileCredentialsRequest(ctx, c, namespace, owner); rerr != nil {
-			return nil, "", rerr
+			return nil, rerr
 		}
 		if err != nil {
-			return nil, "", fmt.Errorf("%w: secret %s/%s has not been written yet, and managed identity %s could not authenticate: %v",
+			return nil, fmt.Errorf("%w: secret %s/%s has not been written yet, and managed identity %s could not authenticate: %v",
 				platform.ErrCredentialsPending, namespace, CredentialsSecretName, id.clientID, err)
 		}
 		logger.V(1).Info("using the managed identity the Subscription names", "clientID", id.clientID)
-		return cred, id.tenantID, nil
+		return cred, nil
 	}
 
 	if cred, err := ambientCredential(); err == nil {
 		if err := validateCredential(ctx, cred); err == nil {
 			logger.V(1).Info("using the credential already available to this process")
-			return cred, "", nil
+			return cred, nil
 		}
 	}
 
 	if err := reconcileCredentialsRequest(ctx, c, namespace, owner); err != nil {
-		return nil, "", err
+		return nil, err
 	}
-	return nil, "", pendingError(namespace)
+	return nil, pendingError(namespace)
 }
 
 // federatedIdentity is the managed identity the Subscription names for

@@ -172,8 +172,7 @@ var _ = BeforeSuite(func() {
 	// what the installer does, which does not include virtual hubs.
 	//
 	// A cluster whose operators federate has no such secret. There the
-	// operator reaches interfaces as spec.azure.networkInterfaceClientID,
-	// a platform identity the deny assignment lets through, and so does
+	// operator reaches interfaces as its own managed identity, and so does
 	// this suite: see interfaceCredential.
 	clusterCred := interfaceCredential(context.Background())
 	nodeFactory, err := armnetwork.NewClientFactory(bgpConfig.Spec.Azure.SubscriptionID, clusterCred, nil)
@@ -224,13 +223,12 @@ var _ = BeforeSuite(func() {
 //
 // Where CCO passes through, that is the root credential in
 // kube-system/azure-credentials. Where the cluster federates there is
-// none; the operator writes interfaces as the identity in
-// spec.azure.networkInterfaceClientID, exchanging its service
-// account's token for it, and the suite does the same with a token it
-// asks the cluster for. The identity's federated credential names the
-// operator's service account and audience openshift, which is what the
-// installer set up for the operator, so nothing extra is trusted for
-// the test.
+// none; the operator writes interfaces as its own managed identity,
+// exchanging its service account's token for it, and the suite does the
+// same with a token it asks the cluster for. The identity's federated
+// credential names the operator's service account and audience
+// openshift, which is what was set up for the operator, so nothing
+// extra is trusted for the test.
 func interfaceCredential(ctx context.Context) azcore.TokenCredential {
 	secret, err := clientset.CoreV1().Secrets("kube-system").Get(ctx, "azure-credentials", metav1.GetOptions{})
 	if err == nil {
@@ -245,11 +243,7 @@ func interfaceCredential(ctx context.Context) azcore.TokenCredential {
 	}
 	Expect(apierrors.IsNotFound(err)).To(BeTrue(), "reading kube-system/azure-credentials: %v", err)
 
-	clientID := bgpConfig.Spec.Azure.NetworkInterfaceClientID
-	Expect(clientID).NotTo(BeEmpty(),
-		"there is no kube-system/azure-credentials, so this cluster federates, and the profile must name "+
-			"spec.azure.networkInterfaceClientID: the identity the operator writes interfaces as")
-
+	clientID := operatorClientID(ctx)
 	tenantID := clusterTenant(ctx)
 
 	expiry := int64(600)
@@ -268,6 +262,37 @@ func interfaceCredential(ctx context.Context) azcore.TokenCredential {
 	}, nil)
 	Expect(err).NotTo(HaveOccurred())
 	return cred
+}
+
+// operatorClientID is the managed identity the operator runs as on a
+// cluster that federates. Where CCO answers the operator's request it is
+// in the secret CCO writes; where nothing does, as on ARO HCP, it is only
+// in the CLIENTID the Subscription puts on the operator's deployment.
+func operatorClientID(ctx context.Context) string {
+	secret, err := clientset.CoreV1().Secrets(operatorNamespace).
+		Get(ctx, azureplatform.CredentialsSecretName, metav1.GetOptions{})
+	if err == nil {
+		clientID := string(secret.Data["azure_client_id"])
+		Expect(clientID).NotTo(BeEmpty(), "%s/%s has no azure_client_id",
+			operatorNamespace, azureplatform.CredentialsSecretName)
+		return clientID
+	}
+	Expect(apierrors.IsNotFound(err)).To(BeTrue(),
+		"reading %s/%s: %v", operatorNamespace, azureplatform.CredentialsSecretName, err)
+
+	dep, err := clientset.AppsV1().Deployments(operatorNamespace).
+		Get(ctx, "openshift-bgp-cloud-connector-controller-manager", metav1.GetOptions{})
+	Expect(err).NotTo(HaveOccurred(), "reading the operator's deployment for CLIENTID")
+	for _, c := range dep.Spec.Template.Spec.Containers {
+		for _, env := range c.Env {
+			if env.Name == "CLIENTID" && env.Value != "" {
+				return env.Value
+			}
+		}
+	}
+	Fail("there is no kube-system/azure-credentials, so this cluster federates, and neither " +
+		azureplatform.CredentialsSecretName + " nor the operator's CLIENTID names the identity it runs as")
+	return ""
 }
 
 // clusterTenant is the Azure tenant of a cluster whose operators

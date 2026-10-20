@@ -28,7 +28,7 @@ The operator is **cloud platform aware**. When platform configuration is provide
 | [Architecture](docs/architecture.md) | The two-layer (cloud + in-cluster) model and the CRD ownership split. |
 | [Cloud platform integration](docs/cloud-integration.md) | How the operator peers with a cloud BGP service, per-cloud actions, auto-discovery, and the AWS/Azure/GCP mapping. |
 | [AWS authentication](docs/aws-authentication.md) | AWS credentials — the recommended CCO path and the IRSA alternative. |
-| [Azure authentication](docs/azure-authentication.md) | Azure credentials — Workload Identity, and the ARO cross-resource-group identity. |
+| [Azure authentication](docs/azure-authentication.md) | Azure credentials: passthrough, ARO with a service principal, and Workload Identity. |
 | [GCP authentication](docs/gcp-authentication.md) | GCP credentials — Workload Identity Federation / Application Default Credentials. |
 | [Manual platform](docs/manual-platform.md) | `platform: Manual` — bring your own BGP router with explicit peer groups, no cloud integration. |
 | [Direct route advertisements](config/samples/direct-route-advertisements/README.md) | Complete example using a user-managed CUDN and `RouteAdvertisements`, without `BGPRouting`. |

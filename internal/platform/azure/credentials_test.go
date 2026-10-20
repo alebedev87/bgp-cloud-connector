@@ -182,7 +182,7 @@ func TestResolveCredentials_AmbientWinsWhenThereIsNoSecret(t *testing.T) {
 	withValidation(t, nil)
 	c := fake.NewClientBuilder().WithScheme(credentialsTestScheme(t)).Build()
 
-	cred, _, err := ResolveCredentials(context.Background(), c, testNamespace, testOwner())
+	cred, err := ResolveCredentials(context.Background(), c, testNamespace, testOwner())
 	if err != nil {
 		t.Fatalf("ResolveCredentials: %v", err)
 	}
@@ -204,7 +204,7 @@ func TestResolveCredentials_CreatesRequestAndWaits(t *testing.T) {
 	withAmbient(t, nil)
 	c := fake.NewClientBuilder().WithScheme(credentialsTestScheme(t)).Build()
 
-	_, _, err := ResolveCredentials(context.Background(), c, testNamespace, testOwner())
+	_, err := ResolveCredentials(context.Background(), c, testNamespace, testOwner())
 	if !errors.Is(err, platform.ErrCredentialsPending) {
 		t.Fatalf("ResolveCredentials: got %v, want %v", err, platform.ErrCredentialsPending)
 	}
@@ -236,7 +236,7 @@ func TestResolveCredentials_CreatesRequestAndWaits(t *testing.T) {
 func TestResolveCredentials_RequestsOnlyThePermissionsItUses(t *testing.T) {
 	withAmbient(t, nil)
 	c := fake.NewClientBuilder().WithScheme(credentialsTestScheme(t)).Build()
-	_, _, err := ResolveCredentials(context.Background(), c, testNamespace, testOwner())
+	_, err := ResolveCredentials(context.Background(), c, testNamespace, testOwner())
 	if !errors.Is(err, platform.ErrCredentialsPending) {
 		t.Fatalf("ResolveCredentials: got %v, want %v", err, platform.ErrCredentialsPending)
 	}
@@ -275,7 +275,7 @@ func TestResolveCredentials_MintedSecretNamesAClientSecretCredential(t *testing.
 		WithObjects(mintedSecret()).
 		Build()
 
-	cred, _, err := ResolveCredentials(context.Background(), c, testNamespace, testOwner())
+	cred, err := ResolveCredentials(context.Background(), c, testNamespace, testOwner())
 	if err != nil {
 		t.Fatalf("ResolveCredentials: %v", err)
 	}
@@ -295,17 +295,12 @@ func TestResolveCredentials_FederatedSecretNamesAWorkloadIdentityCredential(t *t
 		WithObjects(federatedSecret(tokenFile(t))).
 		Build()
 
-	cred, tenantID, err := ResolveCredentials(context.Background(), c, testNamespace, testOwner())
+	cred, err := ResolveCredentials(context.Background(), c, testNamespace, testOwner())
 	if err != nil {
 		t.Fatalf("ResolveCredentials: %v", err)
 	}
 	if _, ok := cred.(*azidentity.WorkloadIdentityCredential); !ok {
 		t.Errorf("got %T, want *azidentity.WorkloadIdentityCredential", cred)
-	}
-	// The second identity for interface calls lives in this tenant, and
-	// nothing else in the pod names it.
-	if tenantID != "tenant-id" {
-		t.Errorf("tenant: got %q, want %q", tenantID, "tenant-id")
 	}
 }
 
@@ -320,7 +315,7 @@ func TestResolveCredentials_SecretWinsOverAmbient(t *testing.T) {
 		WithObjects(mintedSecret()).
 		Build()
 
-	cred, _, err := ResolveCredentials(context.Background(), c, testNamespace, testOwner())
+	cred, err := ResolveCredentials(context.Background(), c, testNamespace, testOwner())
 	if err != nil {
 		t.Fatalf("ResolveCredentials: %v", err)
 	}
@@ -341,7 +336,7 @@ func TestResolveCredentials_RotationTakesEffect(t *testing.T) {
 		WithObjects(mintedSecret()).
 		Build()
 
-	first, _, err := ResolveCredentials(context.Background(), c, testNamespace, testOwner())
+	first, err := ResolveCredentials(context.Background(), c, testNamespace, testOwner())
 	if err != nil {
 		t.Fatalf("first resolve: %v", err)
 	}
@@ -356,7 +351,7 @@ func TestResolveCredentials_RotationTakesEffect(t *testing.T) {
 		t.Fatalf("writing the rotated secret: %v", err)
 	}
 
-	second, _, err := ResolveCredentials(context.Background(), c, testNamespace, testOwner())
+	second, err := ResolveCredentials(context.Background(), c, testNamespace, testOwner())
 	if err != nil {
 		t.Fatalf("second resolve: %v", err)
 	}
@@ -376,7 +371,7 @@ func TestResolveCredentials_SecretMissingClientIDIsAnError(t *testing.T) {
 		WithObjects(secret).
 		Build()
 
-	_, _, err := ResolveCredentials(context.Background(), c, testNamespace, testOwner())
+	_, err := ResolveCredentials(context.Background(), c, testNamespace, testOwner())
 	if err == nil {
 		t.Fatal("ResolveCredentials accepted a secret with no azure_client_id")
 	}
@@ -401,7 +396,7 @@ func TestResolveCredentials_SecretWithNoWayToAuthenticate(t *testing.T) {
 		WithObjects(secret).
 		Build()
 
-	_, _, err := ResolveCredentials(context.Background(), c, testNamespace, testOwner())
+	_, err := ResolveCredentials(context.Background(), c, testNamespace, testOwner())
 	if err == nil {
 		t.Fatal("ResolveCredentials accepted a secret carrying no means of authentication")
 	}
@@ -426,7 +421,7 @@ func TestResolveCredentials_RefusedTokenIsACredentialError(t *testing.T) {
 		WithObjects(mintedSecret()).
 		Build()
 
-	_, _, err := ResolveCredentials(context.Background(), c, testNamespace, testOwner())
+	_, err := ResolveCredentials(context.Background(), c, testNamespace, testOwner())
 	var credErr *platform.CredentialError
 	if !errors.As(err, &credErr) {
 		t.Fatalf("ResolveCredentials: got %v, want a *platform.CredentialError", err)
@@ -445,7 +440,7 @@ func TestResolveCredentials_UpdatesADriftedRequest(t *testing.T) {
 		WithScheme(credentialsTestScheme(t)).
 		WithObjects(driftedRequest()).
 		Build()
-	_, _, err := ResolveCredentials(context.Background(), c, testNamespace, testOwner())
+	_, err := ResolveCredentials(context.Background(), c, testNamespace, testOwner())
 	if !errors.Is(err, platform.ErrCredentialsPending) {
 		t.Fatalf("ResolveCredentials: got %v, want %v", err, platform.ErrCredentialsPending)
 	}
@@ -471,7 +466,7 @@ func TestResolveCredentials_UpdatesADriftedRequestWithTheSecretInPlace(t *testin
 		WithObjects(driftedRequest(), mintedSecret()).
 		Build()
 
-	cred, _, err := ResolveCredentials(context.Background(), c, testNamespace, testOwner())
+	cred, err := ResolveCredentials(context.Background(), c, testNamespace, testOwner())
 	if err != nil {
 		t.Fatalf("ResolveCredentials: %v", err)
 	}
@@ -497,7 +492,7 @@ func TestResolveCredentials_RequestIsOwnedByTheConfiguration(t *testing.T) {
 	withAmbient(t, nil)
 
 	c := fake.NewClientBuilder().WithScheme(credentialsTestScheme(t)).Build()
-	if _, _, err := ResolveCredentials(context.Background(), c, testNamespace, testOwner()); !errors.Is(err, platform.ErrCredentialsPending) {
+	if _, err := ResolveCredentials(context.Background(), c, testNamespace, testOwner()); !errors.Is(err, platform.ErrCredentialsPending) {
 		t.Fatalf("ResolveCredentials: got %v, want %v", err, platform.ErrCredentialsPending)
 	}
 
@@ -521,7 +516,7 @@ func TestResolveCredentials_ExistingRequestIsAdopted(t *testing.T) {
 	unowned.SetOwnerReferences(nil)
 
 	c := fake.NewClientBuilder().WithScheme(credentialsTestScheme(t)).WithObjects(unowned).Build()
-	if _, _, err := ResolveCredentials(context.Background(), c, testNamespace, testOwner()); !errors.Is(err, platform.ErrCredentialsPending) {
+	if _, err := ResolveCredentials(context.Background(), c, testNamespace, testOwner()); !errors.Is(err, platform.ErrCredentialsPending) {
 		t.Fatalf("ResolveCredentials: got %v, want %v", err, platform.ErrCredentialsPending)
 	}
 
@@ -556,7 +551,7 @@ func TestResolveCredentials_TokenAuthNamesTheIdentity(t *testing.T) {
 	withTokenAuth(t, "client-id", "tenant-id", "subscription-id", "uksouth")
 	c := fake.NewClientBuilder().WithScheme(credentialsTestScheme(t)).Build()
 
-	if _, _, err := ResolveCredentials(context.Background(), c, testNamespace, testOwner()); !errors.Is(err, platform.ErrCredentialsPending) {
+	if _, err := ResolveCredentials(context.Background(), c, testNamespace, testOwner()); !errors.Is(err, platform.ErrCredentialsPending) {
 		t.Fatalf("ResolveCredentials: got %v, want %v", err, platform.ErrCredentialsPending)
 	}
 
@@ -583,15 +578,12 @@ func TestResolveCredentials_TokenAuthWithoutSecretUsesTheIdentity(t *testing.T) 
 	withTokenAuth(t, "client-id", "tenant-id", "subscription-id", "uksouth")
 	c := fake.NewClientBuilder().WithScheme(credentialsTestScheme(t)).Build()
 
-	cred, tenantID, err := ResolveCredentials(context.Background(), c, testNamespace, testOwner())
+	cred, err := ResolveCredentials(context.Background(), c, testNamespace, testOwner())
 	if err != nil {
 		t.Fatalf("ResolveCredentials: %v", err)
 	}
 	if _, ok := cred.(*azidentity.WorkloadIdentityCredential); !ok {
 		t.Errorf("got %T, want *azidentity.WorkloadIdentityCredential", cred)
-	}
-	if tenantID != "tenant-id" {
-		t.Errorf("tenant: got %q, want %q", tenantID, "tenant-id")
 	}
 
 	cr := getCredentialsRequest(t, c)
@@ -609,7 +601,7 @@ func TestResolveCredentials_TokenAuthRefusedSaysWhy(t *testing.T) {
 	withTokenAuth(t, "client-id", "tenant-id", "subscription-id", "uksouth")
 	c := fake.NewClientBuilder().WithScheme(credentialsTestScheme(t)).Build()
 
-	_, _, err := ResolveCredentials(context.Background(), c, testNamespace, testOwner())
+	_, err := ResolveCredentials(context.Background(), c, testNamespace, testOwner())
 	if !errors.Is(err, platform.ErrCredentialsPending) {
 		t.Fatalf("ResolveCredentials: got %v, want %v", err, platform.ErrCredentialsPending)
 	}
@@ -637,7 +629,7 @@ func TestResolveCredentials_TokenAuthRefusedIgnoresAmbient(t *testing.T) {
 	withTokenAuth(t, "client-id", "tenant-id", "subscription-id", "uksouth")
 	c := fake.NewClientBuilder().WithScheme(credentialsTestScheme(t)).Build()
 
-	cred, _, err := ResolveCredentials(context.Background(), c, testNamespace, testOwner())
+	cred, err := ResolveCredentials(context.Background(), c, testNamespace, testOwner())
 	if !errors.Is(err, platform.ErrCredentialsPending) {
 		t.Fatalf("ResolveCredentials: got %T, %v, want %v", cred, err, platform.ErrCredentialsPending)
 	}
@@ -656,7 +648,7 @@ func TestResolveCredentials_TokenAuthMissingTokenSaysSo(t *testing.T) {
 	withTokenAuth(t, "client-id", "tenant-id", "subscription-id", "uksouth")
 	c := fake.NewClientBuilder().WithScheme(credentialsTestScheme(t)).Build()
 
-	_, _, err := ResolveCredentials(context.Background(), c, testNamespace, testOwner())
+	_, err := ResolveCredentials(context.Background(), c, testNamespace, testOwner())
 	if !errors.Is(err, platform.ErrCredentialsPending) {
 		t.Fatalf("ResolveCredentials: got %v, want %v", err, platform.ErrCredentialsPending)
 	}
@@ -674,7 +666,7 @@ func TestResolveCredentials_TokenAuthRegionFromNodes(t *testing.T) {
 	withTokenAuth(t, "client-id", "tenant-id", "subscription-id", "")
 	c := fake.NewClientBuilder().WithScheme(credentialsTestScheme(t)).WithObjects(routerNode("centralus")).Build()
 
-	if _, _, err := ResolveCredentials(context.Background(), c, testNamespace, testOwner()); !errors.Is(err, platform.ErrCredentialsPending) {
+	if _, err := ResolveCredentials(context.Background(), c, testNamespace, testOwner()); !errors.Is(err, platform.ErrCredentialsPending) {
 		t.Fatalf("ResolveCredentials: got %v, want %v", err, platform.ErrCredentialsPending)
 	}
 
@@ -691,7 +683,7 @@ func TestResolveCredentials_PartialTokenAuthNamesNothing(t *testing.T) {
 	withTokenAuth(t, "client-id", "", "", "")
 	c := fake.NewClientBuilder().WithScheme(credentialsTestScheme(t)).Build()
 
-	_, _, err := ResolveCredentials(context.Background(), c, testNamespace, testOwner())
+	_, err := ResolveCredentials(context.Background(), c, testNamespace, testOwner())
 	if !errors.Is(err, platform.ErrCredentialsPending) {
 		t.Fatalf("ResolveCredentials: got %v, want %v", err, platform.ErrCredentialsPending)
 	}
@@ -714,7 +706,7 @@ func TestResolveCredentials_PendingNamesTheSubscriptionVariables(t *testing.T) {
 	withTokenAuth(t, "", "", "", "")
 	c := fake.NewClientBuilder().WithScheme(credentialsTestScheme(t)).Build()
 
-	_, _, err := ResolveCredentials(context.Background(), c, testNamespace, testOwner())
+	_, err := ResolveCredentials(context.Background(), c, testNamespace, testOwner())
 	if !errors.Is(err, platform.ErrCredentialsPending) {
 		t.Fatalf("ResolveCredentials: got %v, want %v", err, platform.ErrCredentialsPending)
 	}
@@ -740,7 +732,7 @@ func TestResolveCredentials_TokenAuthKeepsTheRequestsRegion(t *testing.T) {
 	// No nodes at all, so the region can only have come from the request.
 	c := fake.NewClientBuilder().WithScheme(credentialsTestScheme(t)).WithObjects(existing).Build()
 
-	if _, _, err := ResolveCredentials(context.Background(), c, testNamespace, testOwner()); !errors.Is(err, platform.ErrCredentialsPending) {
+	if _, err := ResolveCredentials(context.Background(), c, testNamespace, testOwner()); !errors.Is(err, platform.ErrCredentialsPending) {
 		t.Fatalf("ResolveCredentials: got %v, want %v", err, platform.ErrCredentialsPending)
 	}
 

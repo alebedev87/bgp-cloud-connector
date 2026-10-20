@@ -9,7 +9,7 @@ The operator needs Azure credentials to manage the Route Server's BGP connection
 | **Azure IPI, passthrough** (the default) | Nothing | [Passthrough](#passthrough) |
 | **ARO classic with a service principal** | Grant the cluster's principal a role on the resource group holding the Route Server | [ARO with a service principal](#aro-with-a-service-principal) |
 | **Azure IPI, Manual mode with workload identity** (`ccoctl`) | Create a managed identity for the operator and give its ids to the Subscription | [Workload identity](#workload-identity) |
-| **ARO classic with managed identities** | As workload identity, plus a second identity for the network interfaces | [ARO with managed identities](#aro-with-managed-identities) |
+| **ARO classic with managed identities** | Not supported | [ARO with managed identities](#aro-with-managed-identities) |
 
 ## How the operator gets a credential
 
@@ -102,37 +102,11 @@ Use Manual approval for the Subscription, as the console suggests on these clust
 
 ## ARO with managed identities
 
-ARO classic built with managed identities is workload identity, so everything in [Workload identity](#workload-identity) applies, with one addition.
+ARO classic built with managed identities is not supported.
 
-ARO puts the cluster's VMs and network interfaces in a managed resource group (`aro-<cluster>` by default) behind a deny assignment. The deny assignment lets through only the cluster's platform identities and the ARO resource provider. An identity you create for the operator cannot write the router nodes' interfaces, whatever role it holds.
+ARO puts the cluster's VMs and network interfaces in a managed resource group (`aro-<cluster>` by default) behind a deny assignment, which lets through only the cluster's platform identities and the ARO resource provider. An identity you create for the operator cannot turn on IP forwarding on the router nodes' interfaces, whatever role it holds. The platform identities are not available to it either: the ARO support policy forbids re-using a platform workload's managed identity, and an extra federated credential on one fails the cluster's next `az aro update`. OpenShift's machine API has no way to ask for forwarding when it creates a node.
 
-So on ARO the operator writes interfaces as the `machine-api` platform identity, and uses its own identity for everything else.
-
-**Step 1: create the operator's identity** as in [Workload identity](#workload-identity), in the cluster's resource group (the one holding the cluster resource and the virtual network), with `Network Contributor` there so it can manage the Route Server.
-
-**Step 2: trust the operator's ServiceAccount on the `machine-api` identity as well.**
-
-```bash
-az identity federated-credential create -g "$rg" --identity-name <machine-api identity> \
-    --name bgp-cloud-connector --issuer "$issuer" --subject "$subject" --audiences openshift
-nic_client_id=$(az identity show -g "$rg" -n <machine-api identity> --query clientId -o tsv)
-```
-
-The platform identities are the ones you named when you created the cluster; `az aro show` lists them under `platformWorkloadIdentityProfile`.
-
-**Step 3: give the operator its identity** through the Subscription, as in [Workload identity](#workload-identity).
-
-**Step 4: name the `machine-api` identity in the `BGPCloudConfiguration`:**
-
-```yaml
-spec:
-  azure:
-    networkInterfaceClientID: <nic_client_id>
-```
-
-The operator then makes network interface calls as that identity, exchanging its projected ServiceAccount token for it, in the tenant named in its own secret. Route Server calls keep using the operator's own identity. Leave `networkInterfaceClientID` unset everywhere else: without a deny assignment one identity reaches both.
-
-See [custom-resources.md](custom-resources.md) for the full `spec.azure` field reference.
+ARO classic with a service principal is supported; see [ARO with a service principal](#aro-with-a-service-principal).
 
 ## Troubleshooting
 
@@ -142,7 +116,7 @@ The operator reports credential state through the `CloudEndpointsDiscovered` con
 |:---|:---|:---|
 | `WaitingForCloudCredentials` | The operator has asked CCO for credentials and the secret has not been written. It requeues every 10 seconds. | On a workload identity cluster, the message names any of `CLIENTID`, `TENANTID` and `SUBSCRIPTIONID` that are unset; CCO writes nothing for a request that names no identity. If all three are set, check the `CredentialsRequest`'s status in `openshift-cloud-credential-operator`. |
 | `CloudCredentialsInvalid` | A credential was found and Azure refused it when the operator asked for a token. | Check the identity's federated credential: issuer, subject and audience `openshift` must match exactly. For a service principal, check the secret CCO wrote. |
-| `CloudDiscoveryFailed` | The credential works and a Route Server or interface call failed. | An authorisation error here means the identity lacks a role on the resource group named in the error. On ARO, a refusal mentioning a deny assignment means `networkInterfaceClientID` is unset or names an identity the deny assignment does not let through. |
+| `CloudDiscoveryFailed` | The credential works and a Route Server or interface call failed. | An authorisation error here means the identity lacks a role on the resource group named in the error. On ARO, a refusal mentioning a deny assignment means the operator's identity is not one the deny assignment lets through; see [ARO with managed identities](#aro-with-managed-identities). |
 
 Inspect the live conditions:
 

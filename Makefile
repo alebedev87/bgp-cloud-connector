@@ -36,8 +36,9 @@ CATALOG_DIR := catalog
 OCP_VERSION ?= 4.22
 OCP_CATALOG_DIR := $(CATALOG_DIR)/v$(OCP_VERSION)
 
-# Set the Operator SDK version to use. By default, what is installed on the system is used.
-# This is useful for CI or a project to utilize a specific version of the operator-sdk toolkit.
+# The operator-sdk version downloaded into $(LOCALBIN). One on PATH is not
+# used: the generated bundle records the version that wrote it, so any
+# other version leaves bundle/ out of date and fails verify-bundle.
 OPERATOR_SDK_VERSION ?= v1.42.2
 # Image URL to use all building/pushing image targets
 IMG ?= controller:latest
@@ -322,7 +323,6 @@ ENVTEST_K8S_VERSION ?= $(shell go list -m -f "{{ .Version }}" k8s.io/api | awk -
 OPERATOR_SDK ?= $(LOCALBIN)/operator-sdk
 operator-sdk: ## Download operator-sdk locally if necessary.
 ifeq (,$(wildcard $(OPERATOR_SDK)))
-ifeq (, $(shell which operator-sdk 2>/dev/null))
 	@{ \
 	set -e ;\
 	mkdir -p $(dir $(OPERATOR_SDK)) ;\
@@ -330,9 +330,6 @@ ifeq (, $(shell which operator-sdk 2>/dev/null))
 	curl -sSLo $(OPERATOR_SDK) https://github.com/operator-framework/operator-sdk/releases/download/$(OPERATOR_SDK_VERSION)/operator-sdk_$${OS}_$${ARCH} ;\
 	chmod +x $(OPERATOR_SDK) ;\
 	}
-else
-OPERATOR_SDK = $(shell which operator-sdk)
-endif
 endif
 
 .PHONY: bundle

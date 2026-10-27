@@ -40,7 +40,8 @@ metadata:
     containerImage: controller:latest
     description: Automates L3 direct routing between CUDN Pod networks and external
       networks via BGP on OpenShift. Cloud platform aware — auto-discovers BGP infrastructure
-      on AWS (VPC Route Server) and works on-premise with explicit configuration.
+      on AWS (VPC Route Server) and Azure (Route Server), and works on-premise with
+      explicit configuration.
     features.operators.openshift.io/disconnected: "true"
     features.operators.openshift.io/fips-compliant: "true"
     features.operators.openshift.io/proxy-aware: "true"
@@ -51,7 +52,7 @@ metadata:
     operatorframework.io/suggested-namespace: openshift-bgp-cloud-connector
     operators.openshift.io/valid-subscription: '["OpenShift Kubernetes Engine", "OpenShift
       Container Platform", "OpenShift Platform Plus"]'
-  name: bgp-cloud-connector.v1.0.0
+  name: bgp-cloud-connector.v1.1.0
   namespace: placeholder
 spec:
   apiservicedefinitions: {}
@@ -76,7 +77,7 @@ spec:
     Cluster User Defined Networks (CUDN) and external networks via BGP
     on OpenShift. Core BGP and CUDN functionality works on any OpenShift
     cluster with external BGP servers. When platform configuration is
-    provided (e.g. AWS), the operator auto-discovers cloud BGP
+    provided (e.g. AWS or Azure), the operator auto-discovers cloud BGP
     infrastructure and manages cloud-side networking resources. It
     replaces manual in-cluster configuration steps by reconciling
     FRRConfiguration, ClusterUserDefinedNetwork, and
@@ -105,4 +106,4 @@ spec:
   relatedImages:
   - image: controller:latest
     name: bgp-cloud-connector
-  version: 1.0.0
+  version: 1.1.0
